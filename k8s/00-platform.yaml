@@ -1,0 +1,48 @@
+# Namespaces: one per team that owns a layer of the platform.
+#   llm        the model servers (platform team)
+#   gateway    the API every app calls (platform team)
+#   monitoring Prometheus and Grafana
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llm
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+# The model loader's identity. Terraform links it to an IAM role that can write to the model bucket.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-loader
+  namespace: llm
+---
+# EKS Auto Mode includes the EBS driver but no StorageClass. This one becomes the cluster default.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.eks.amazonaws.com
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+parameters:
+  type: gp3
+  encrypted: "true"
+---
+# Turns on Kubernetes NetworkPolicy enforcement on EKS Auto Mode.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: amazon-vpc-cni
+  namespace: kube-system
+data:
+  enable-network-policy-controller: "true"

@@ -1,0 +1,26 @@
+# kube-prometheus-stack 92.6.0: Prometheus, Grafana, Alertmanager, node and cluster metrics.
+grafana:
+  admin:
+    existingSecret: grafana-admin       # created by scripts/create-secrets.sh
+    userKey: admin-user
+    passwordKey: admin-password
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL              # loads every ConfigMap labelled grafana_dashboard=1
+
+prometheus:
+  prometheusSpec:
+    # Pick up PodMonitors and alert rules from every namespace, not only the ones made by this chart.
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi

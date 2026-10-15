@@ -1,0 +1,57 @@
+# How GPU nodes are built: IAM role, private subnets, security group, and a 200 GiB local disk.
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: gpu
+spec:
+  role: __NODE_ROLE__
+  subnetSelectorTerms:
+    - tags:
+        astra/cluster: __CLUSTER_NAME__
+  securityGroupSelectorTerms:
+    - id: __CLUSTER_SG__
+  ephemeralStorage:
+    size: 200Gi
+    iops: 6000
+    throughput: 500
+  networkPolicy: DefaultAllow   # pods with no NetworkPolicy stay open; vLLM has one
+  tags:
+    Workload: llm-inference
+---
+# Which GPU machines Auto Mode may start, and the spend ceiling.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu
+spec:
+  template:
+    metadata:
+      labels:
+        workload: llm-inference
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: gpu
+      requirements:
+        # Three g6e sizes, each with ONE NVIDIA L40S 48 GB. Auto Mode starts the cheapest one AWS has
+        # in stock, so a zone that is out of g6e.xlarge gets a g6e.2xlarge instead of no node at all.
+        # Larger sizes have the same GPU at up to 4x the price, so they are left out.
+        #   g6e.xlarge $1.861/h   g6e.2xlarge $2.242/h   g6e.4xlarge $3.004/h   (us-east-1, October 2026)
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["g6e.xlarge", "g6e.2xlarge", "g6e.4xlarge"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+      taints:
+        - key: nvidia.com/gpu
+          effect: NoSchedule                # only pods that tolerate it land on a GPU node
+      expireAfter: 336h                     # replace every node within 14 days: fresh, patched image
+  limits:
+    nvidia.com/gpu: 3                       # 2 serving + 1 spare for a rolling update, never more
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 10m
+    budgets:
+      - nodes: "1"                          # voluntary changes take one GPU node at a time

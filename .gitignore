@@ -1,0 +1,7 @@
+terraform/.terraform/
+terraform/*.tfstate*
+terraform/terraform.tfvars
+terraform/tfplan
+build/
+*.bak
+examples/.env

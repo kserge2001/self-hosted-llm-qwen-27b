@@ -1,0 +1,56 @@
+# Model promotion: Hugging Face -> the company's model bucket, as a versioned folder.
+# Run once per model version:  kubectl create -f build/20-model-loader.yaml
+# MODEL_REVISION pins one exact Hugging Face commit, so the weights that were reviewed are the weights that ship.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: model-loader-
+  namespace: llm
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      serviceAccountName: model-loader
+      restartPolicy: Never
+      containers:
+        - name: loader
+          image: python:3.12-slim
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              pip install --quiet --root-user-action=ignore "huggingface_hub[hf_xet]" awscli
+              # Only what vLLM needs: weights, configs, tokenizer, chat template.
+              # One --include per pattern: extra patterns after a single --include are read as file names.
+              hf download "${MODEL_ID}" --revision "${MODEL_REVISION}" --local-dir /work/model \
+                --include "*.safetensors" --include "*.json" --include "*.txt" --include "*.jinja"
+              # Stop here if the weights are missing, so a broken model is never promoted.
+              ls /work/model/*.safetensors >/dev/null
+              aws s3 sync /work/model "s3://__MODEL_BUCKET__/${MODEL_PATH}" --exclude ".cache/*" --only-show-errors
+              # Written last: model servers wait for this file, so they never load a half-uploaded model.
+              echo "${MODEL_ID} ${MODEL_REVISION} $(date -u +%FT%TZ)" | aws s3 cp - "s3://__MODEL_BUCKET__/${MODEL_PATH}/_PROMOTED"
+              aws s3 ls --recursive --summarize --human-readable "s3://__MODEL_BUCKET__/${MODEL_PATH}" | tail -2
+          env:
+            - name: MODEL_ID
+              value: Qwen/Qwen3.8-27B-FP8
+            - name: MODEL_REVISION
+              value: 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a   # Hugging Face commit, checked 2026-10-14
+            - name: MODEL_PATH
+              value: qwen3.8-27b-fp8/v1
+            - name: AWS_DEFAULT_REGION
+              value: __REGION__
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+              ephemeral-storage: 45Gi
+            limits:
+              memory: 8Gi
+          volumeMounts:
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: work
+          emptyDir:
+            sizeLimit: 45Gi

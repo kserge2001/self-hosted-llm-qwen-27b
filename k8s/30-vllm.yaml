@@ -1,0 +1,257 @@
+# The model servers: vLLM serving Qwen3.8-27B (FP8), one replica per GPU node, two nodes in two zones.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vllm
+  namespace: llm
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: llm
+  labels:
+    app.kubernetes.io/name: vllm
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 3600     # a new GPU node plus 31 GB of weights takes longer than the 600s default
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                   # start one new replica (one new GPU node) before stopping an old one
+      maxUnavailable: 0             # never drop below two serving replicas during a change
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vllm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vllm
+        model: qwen3.8-27b-fp8
+    spec:
+      serviceAccountName: vllm
+      terminationGracePeriodSeconds: 120
+      # Without this, Kubernetes injects VLLM_PORT=tcp://... for the Service named "vllm",
+      # and vLLM reads it as its own setting and refuses to start.
+      enableServiceLinks: false
+      nodeSelector:
+        karpenter.sh/nodepool: gpu
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule    # the two replicas must be in different zones
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vllm
+      initContainers:
+        # Copy the weights from the model bucket to the node's local NVMe disk, through the S3 endpoint.
+        # Waits for the _PROMOTED file, so a model that is still uploading is never loaded.
+        - name: fetch-model
+          image: public.ecr.aws/aws-cli/aws-cli:2.37.13
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until aws s3 ls "s3://__MODEL_BUCKET__/${MODEL_PATH}/_PROMOTED" >/dev/null 2>&1; do
+                echo "waiting for ${MODEL_PATH} to be promoted (k8s/20-model-loader.yaml)"; sleep 30
+              done
+              aws s3 sync "s3://__MODEL_BUCKET__/${MODEL_PATH}" "/models/${MODEL_PATH}" --exclude "_PROMOTED" --only-show-errors
+              du -sh "/models/${MODEL_PATH}"
+          env:
+            - name: MODEL_PATH
+              value: qwen3.8-27b-fp8/v1
+            - name: AWS_DEFAULT_REGION
+              value: __REGION__
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              memory: 8Gi       # writing 29 GiB fills the page cache, which counts here; 2Gi was OOMKilled
+          volumeMounts:
+            - name: models
+              mountPath: /models
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.31.0   # pinned: a new release never changes production by surprise
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              exec vllm serve "/models/${MODEL_PATH}" \
+                --served-model-name qwen3.8-27b \
+                --max-model-len 32768 \
+                --gpu-memory-utilization 0.92 \
+                --max-num-seqs 128 \
+                --language-model-only \
+                --reasoning-parser qwen3 \
+                --enable-auto-tool-choice \
+                --tool-call-parser qwen3_coder \
+                --default-chat-template-kwargs '{"enable_thinking": false}' \
+                --api-key "${VLLM_API_KEY}"
+          env:
+            - name: MODEL_PATH
+              value: qwen3.8-27b-fp8/v1
+            - name: VLLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vllm-api-key
+                  key: api-key
+            - name: HF_HUB_OFFLINE
+              value: "1"                     # weights are local; never reach out to the internet
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: "3"
+              memory: 24Gi
+              nvidia.com/gpu: 1
+            limits:
+              memory: 28Gi
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              readOnly: true
+            - name: shm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            failureThreshold: 80             # up to 20 minutes to load weights and warm up
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                # Leave the Service first, let answers in progress finish, then stop.
+                command: ["/bin/sh", "-c", "sleep 30"]
+      volumes:
+        - name: models
+          emptyDir:
+            sizeLimit: 60Gi
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm
+  namespace: llm
+  labels:
+    app.kubernetes.io/name: vllm
+spec:
+  selector:
+    app.kubernetes.io/name: vllm
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+# Voluntary disruptions (node expiry, upgrades, kubectl drain) take at most one replica away at a time.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vllm
+  namespace: llm
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vllm
+---
+# Only the gateway and Prometheus can reach the model servers. An app that skips the gateway
+# skips its budget, so the network blocks it. vLLM leaves /metrics open, so the network is the real lock.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vllm-ingress
+  namespace: llm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vllm
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateway
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vllm
+  namespace: llm
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vllm
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+---
+# The alerts an on-call engineer is paged for. Each one names what users experience.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vllm
+  namespace: llm
+spec:
+  groups:
+    - name: astra-serving
+      rules:
+        - alert: AstraCapacityDegraded
+          expr: kube_deployment_status_replicas_available{namespace="llm", deployment="vllm"} < 2
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: Fewer than 2 model replicas for 10 minutes. One more failure means Astra is down.
+        - alert: AstraQueueBacklog
+          expr: sum(vllm:num_requests_waiting) > 10
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: More than 10 requests waiting for a GPU for 5 minutes. Users see slow first words.
+        - alert: AstraSlowFirstToken
+          expr: histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m]))) > 5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: 95% of answers start within 5 seconds no longer holds (10 minutes).
+        - alert: AstraKVCacheFull
+          expr: max(vllm:kv_cache_usage_perc) > 0.95
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: GPU memory for conversations above 95% for 10 minutes. Requests are queued.
