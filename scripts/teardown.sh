@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Deletes the whole lab, so the hourly bill stops. The order matters:
 #   1. Stop the root app's auto-sync, then delete the apps in argocd/apps (model server, gateway,
-#      Langfuse, the app), while the controllers that clean up after them still run.
+#      the app), while the controllers that clean up after them still run.
 #   2. Pause Argo CD, then remove load balancers, DNS records, disks and the Karpenter NodePools.
 #      Terraform never created these, so it cannot delete them, and they would block it.
 #   3. The astra/teams/* secrets (sync_teams.py made them, not Terraform), then terraform destroy
 #      of terraform/foundations (cluster, network, database, buckets, ECR, secrets).
 #   4. The bootstrap state bucket. Last, because step 3 keeps its state there.
+#   5. scripts/check-clean.sh lists anything that is still there (exit code 1 if something is).
 #
 # Run from the repository's main folder:  bash scripts/teardown.sh
 set -euo pipefail
@@ -23,10 +24,10 @@ echo "== 1. Argo CD apps"
 kubectl -n argocd patch application platform --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'
 # The apps' Applications carry the Argo CD resources finalizer, so deleting the ApplicationSet also
 # deletes the pods, Services and Ingresses they made.
-for appset in serving-canary k8s-assistant langfuse gateway serving; do
+for appset in serving-canary k8s-assistant gateway serving; do
   kubectl -n argocd delete applicationset "$appset" --ignore-not-found --wait=true
 done
-for app in serving-canary k8s-assistant langfuse gateway serving; do
+for app in serving-canary k8s-assistant gateway serving; do
   kubectl -n argocd wait --for=delete "application/$app" --timeout=15m 2>/dev/null || true
 done
 
@@ -46,7 +47,7 @@ echo "== 2b. DNS: wait until ExternalDNS has deleted its records in $DOMAIN"
 records() {
   aws route53 list-resource-record-sets --hosted-zone-id "$ZONE_ID" --output text \
     --query "ResourceRecordSets[?Type=='A' || Type=='AAAA' || Type=='CNAME'].Name" \
-    | tr '\t' '\n' | grep -E "^(astra|argocd|grafana|langfuse)\.${DOMAIN//./\\.}\.?$" || true
+    | tr '\t' '\n' | grep -E "^(astra|argocd|grafana)\.${DOMAIN//./\\.}\.?$" || true
 }
 for _ in $(seq 60); do
   left=$(records)
@@ -102,3 +103,6 @@ rm -f "$VERSIONS"
 aws s3api delete-bucket --bucket "$BUCKET"
 # Terraform now sees the bucket is gone and removes the rest (bucket settings, backend.hcl).
 terraform -chdir=terraform/bootstrap destroy
+
+echo "== 5. Final check: is anything from this build left in the account?"
+bash scripts/check-clean.sh "$REGION" "$DOMAIN"

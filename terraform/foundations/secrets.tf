@@ -1,9 +1,10 @@
 # Every secret of the platform lives in AWS Secrets Manager under astra/.
 # External Secrets copies them into the cluster, so no secret is ever written to Git.
 #
-# Terraform generates most values. One it cannot know, so it creates only the empty secret
-# and you set the value with the AWS CLI (see the `fill_hf_token` output):
+# Terraform generates most values. Two it cannot know, so it creates only the empty secret
+# and you set the value with the AWS CLI (see the fill_hf_token and fill_langfuse_keys outputs):
 #   astra/hf-token          a Hugging Face read token, used by the model loader Job
+#   astra/langfuse/cloud    the keys of your Langfuse Cloud project, used by the gateway
 # astra/teams/<team> is not here: gateway/sync_teams.py writes those.
 
 locals {
@@ -37,17 +38,6 @@ resource "random_password" "vllm_api_key" {
   special = false
 }
 
-resource "random_password" "langfuse" {
-  for_each = toset(["salt", "nextauth_secret", "public_key", "secret_key", "admin_password", "clickhouse_password", "redis_password", "postgres_password"])
-  length   = 32
-  special  = false
-}
-
-# Langfuse wants a 256-bit encryption key written as 64 hex characters.
-resource "random_id" "langfuse_encryption_key" {
-  byte_length = 32
-}
-
 locals {
   generated_secrets = {
     "rds/master" = jsonencode({
@@ -69,23 +59,10 @@ locals {
     # The salt key encrypts provider credentials in the database. Never change it after the first start.
     "litellm/salt-key" = random_password.litellm_salt_key.result
     "vllm/api-key"     = random_password.vllm_api_key.result
-    # Exactly the keys gateway/langfuse/manifests/externalsecrets.yaml reads.
-    "langfuse/init" = jsonencode({
-      salt                = random_password.langfuse["salt"].result
-      encryption_key      = random_id.langfuse_encryption_key.hex
-      nextauth_secret     = random_password.langfuse["nextauth_secret"].result
-      public_key          = "pk-lf-${random_password.langfuse["public_key"].result}"
-      secret_key          = "sk-lf-${random_password.langfuse["secret_key"].result}"
-      admin_email         = "admin@${var.domain}" # the Langfuse login name; no mail is sent to it
-      admin_password      = random_password.langfuse["admin_password"].result
-      clickhouse_password = random_password.langfuse["clickhouse_password"].result
-      redis_password      = random_password.langfuse["redis_password"].result
-      postgres_password   = random_password.langfuse["postgres_password"].result
-    })
   }
 
   # Secrets you fill in by hand.
-  student_secrets = toset(["hf-token"])
+  student_secrets = toset(["hf-token", "langfuse/cloud"])
 }
 
 resource "aws_secretsmanager_secret" "generated" {

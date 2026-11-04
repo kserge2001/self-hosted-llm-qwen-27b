@@ -41,9 +41,9 @@ variable "repo_revision" {
 }
 
 variable "db_instance_class" {
-  description = "RDS PostgreSQL size for the litellm database."
+  description = "RDS PostgreSQL size for the litellm database. The smallest class is enough for the lab."
   type        = string
-  default     = "db.t4g.small"
+  default     = "db.t4g.micro"
 }
 
 variable "system_instance_types" {
@@ -63,7 +63,6 @@ variable "apps" {
   type = object({
     serving       = optional(bool, false) # vLLM (argocd/apps/serving.yaml), needs the model in S3 first
     gateway       = optional(bool, false) # LiteLLM, Redis, Presidio (argocd/apps/gateway.yaml)
-    langfuse      = optional(bool, false) # Langfuse (argocd/apps/langfuse.yaml)
     k8s_assistant = optional(bool, false) # the example app (argocd/apps/k8s-assistant.yaml)
   })
   default = {}
@@ -82,8 +81,5 @@ variable "addons" {
     kube_prometheus_stack        = true
     dcgm_exporter                = true
     db_init                      = true # the litellm database on RDS (platform/db-init)
-    # Langfuse needs the ClickHouse operator, and the operator needs cert-manager.
-    cert_manager        = true
-    clickhouse_operator = true
   }
 }

@@ -45,7 +45,6 @@ locals {
     domain                    = var.domain
     acm_certificate_arn       = aws_acm_certificate_validation.this.certificate_arn
     models_bucket             = aws_s3_bucket.this["models"].bucket
-    langfuse_bucket           = aws_s3_bucket.this["langfuse"].bucket
     rds_host                  = aws_db_instance.this.address
     bedrock_guardrail_id      = aws_bedrock_guardrail.this.guardrail_id
     bedrock_guardrail_version = aws_bedrock_guardrail_version.this.version

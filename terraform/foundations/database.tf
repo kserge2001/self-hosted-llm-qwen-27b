@@ -1,5 +1,4 @@
 # One private PostgreSQL instance for LiteLLM (keys, teams, spend).
-# Langfuse keeps its own PostgreSQL inside the cluster (gateway/langfuse).
 # Terraform creates the instance and the secrets. The `db-init` Job in platform/db-init reads
 # astra/rds/master and creates the litellm database and user from astra/rds/litellm.
 
@@ -35,8 +34,7 @@ resource "aws_db_instance" "this" {
   engine                 = "postgres"
   engine_version         = "18" # major only: RDS picks the newest 18.x minor (18.6 on 2026-10-28)
   instance_class         = var.db_instance_class
-  allocated_storage      = 20
-  max_allocated_storage  = 100
+  allocated_storage      = 20 # the gp3 minimum; LiteLLM's keys, teams and spend use a few MB
   storage_type           = "gp3"
   storage_encrypted      = true
   username               = "postgres"
@@ -46,9 +44,10 @@ resource "aws_db_instance" "this" {
   publicly_accessible    = false
 
   auto_minor_version_upgrade = true
-  backup_retention_period    = 7
-  # Lab settings. Production: multi_az = true, deletion_protection = true, a final snapshot.
-  multi_az            = false
-  deletion_protection = false
-  skip_final_snapshot = true
+  # Lab settings. Production: multi_az = true, deletion_protection = true, backups kept 7-35 days,
+  # storage autoscaling (max_allocated_storage) and a final snapshot.
+  backup_retention_period = 0 # no automated backups: the lab is deleted after each session
+  multi_az                = false
+  deletion_protection     = false
+  skip_final_snapshot     = true
 }

@@ -1,10 +1,8 @@
-# Two buckets, named <name>-<job>-<account> (bucket names are global).
-#   models   - model weights, prefix <model>/<revision>/ (written by the Job in model/)
-#   langfuse - Langfuse events and media
+# One bucket, named <name>-models-<account> (bucket names are global): the model weights,
+# prefix <model>/<revision>/ (written by the Job in model/).
 locals {
   buckets = {
-    models   = "${var.name}-models-${local.account_id}"
-    langfuse = "${var.name}-langfuse-${local.account_id}"
+    models = "${var.name}-models-${local.account_id}"
   }
 }
 

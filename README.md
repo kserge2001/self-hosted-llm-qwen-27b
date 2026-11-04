@@ -34,12 +34,12 @@ There is no CI in this build. Every step is a command you run, so you see each o
 |---|---|---|
 | `terraform/bootstrap/` | the S3 bucket for Terraform state | you (`terraform apply`) |
 | `terraform/foundations/` | the AWS account side of the platform | you (`terraform apply`) |
-| `argocd/addons/` | one ApplicationSet per shared tool: External Secrets, LB controller, ExternalDNS, Karpenter NodePools, Kyverno, KEDA, monitoring, cert-manager, ClickHouse operator, db-init | Argo CD |
-| `argocd/apps/` | one ApplicationSet per app: `serving`, `gateway`, `langfuse`, `k8s-assistant` (and `serving-canary` during a canary) | Argo CD |
+| `argocd/addons/` | one ApplicationSet per shared tool: External Secrets, LB controller, ExternalDNS, Karpenter NodePools, Kyverno, KEDA, monitoring, db-init | Argo CD |
+| `argocd/apps/` | one ApplicationSet per app: `serving`, `gateway`, `k8s-assistant` (and `serving-canary` during a canary) | Argo CD |
 | `platform/` | small charts the add-ons use: cluster basics, NodePools, policies, dashboards, the database Job | Argo CD |
 | `model/` | the model spec and the loader Job: download, scan, upload to S3 | you (`kubectl apply -k`) |
 | `serving/` | our vLLM Helm chart and the values of the version that serves | Argo CD |
-| `gateway/` | LiteLLM, Langfuse and Presidio settings, `teams.yaml`, `sync_teams.py` | Argo CD, and you for the teams |
+| `gateway/` | LiteLLM and Presidio settings, `teams.yaml`, `sync_teams.py` (traces go to Langfuse Cloud) | Argo CD, and you for the teams |
 | `apps/k8s-assistant/` | an app that uses Astra: code, tests, Dockerfile, Kubernetes manifests | you (docker), Argo CD (deploy) |
 | `scripts/` | canary, test traffic, spend report, teardown | you |
 | `runbooks/` | what to do when something goes wrong | you |

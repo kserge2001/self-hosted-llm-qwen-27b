@@ -27,12 +27,11 @@ locals {
   azs            = slice(sort(data.aws_ec2_instance_type_offerings.gpu.locations), 0, min(3, length(data.aws_ec2_instance_type_offerings.gpu.locations)))
   vpc_cidr       = "10.0.0.0/16"
 
-  # Host names behind the one internal ALB. All four go on one ACM certificate.
+  # Host names behind the one internal ALB. All three go on one ACM certificate.
   hosts = {
-    gateway  = "astra.${var.domain}"
-    argocd   = "argocd.${var.domain}"
-    grafana  = "grafana.${var.domain}"
-    langfuse = "langfuse.${var.domain}"
+    gateway = "astra.${var.domain}"
+    argocd  = "argocd.${var.domain}"
+    grafana = "grafana.${var.domain}"
   }
 
   # Secrets Manager ARN prefix. Real ARNs end with a random 6-character suffix, hence the wildcard.

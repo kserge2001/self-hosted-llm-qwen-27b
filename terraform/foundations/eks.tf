@@ -10,6 +10,20 @@ module "eks" {
   endpoint_public_access_cidrs = var.admin_cidrs
   endpoint_private_access      = true
 
+  # Pods get AWS roles through EKS Pod Identity (pod-identity.tf), so no IAM OIDC provider for IRSA.
+  enable_irsa = false
+
+  # EKS already encrypts all Kubernetes API data (Secrets included) with an AWS owned key, at no cost
+  # (Kubernetes 1.28 and later). So no customer managed KMS key: nothing to pay for, and nothing that
+  # waits 7-30 days to be deleted after terraform destroy. A company that must hold its own key sets one.
+  create_kms_key    = false
+  encryption_config = null
+
+  # Control-plane logs in CloudWatch: only the audit log (who did what in the cluster), kept 7 days.
+  # Lab setting. Production keeps api, audit and authenticator, for as long as the company's rules say.
+  enabled_log_types                      = ["audit"]
+  cloudwatch_log_group_retention_in_days = 7
+
   # Whoever runs `terraform apply` becomes cluster admin through an EKS access entry.
   # Terraform needs this itself, to install Karpenter and Argo CD below.
   enable_cluster_creator_admin_permissions = true
@@ -38,7 +52,7 @@ module "eks" {
     eks-pod-identity-agent = {
       before_compute = true
     }
-    # Persistent volumes (Prometheus, Langfuse ClickHouse) need the EBS CSI driver.
+    # Persistent volumes (Prometheus, the model loader's work disk) need the EBS CSI driver.
     aws-ebs-csi-driver = {
       pod_identity_association = [{
         role_arn        = module.ebs_csi_pod_identity.iam_role_arn

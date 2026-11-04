@@ -9,7 +9,7 @@
 #   1. load the new revision into S3 first:   change revision in model/qwen3.8-27b.yaml, run the Job in model/
 #   bash scripts/canary.sh start <revision>   2. canary release with the new revision, no traffic yet
 #   bash scripts/canary.sh weight 10          3. gateway: main 90, canary 10   (later: 25, 50 ...)
-#   bash scripts/load.sh 200                  4. send test traffic; compare the two in Grafana and Langfuse
+#   bash scripts/load.sh 200                  4. send test traffic; compare the two in Grafana
 #   bash scripts/canary.sh promote            5a. the main release rolls to the new revision; canary removed
 #   bash scripts/canary.sh rollback           5b. the main release stays as it is; canary removed
 #

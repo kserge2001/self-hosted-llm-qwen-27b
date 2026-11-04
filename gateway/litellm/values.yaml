@@ -54,7 +54,7 @@ db:
 masterkeySecretName: litellm-env
 masterkeySecretKey: LITELLM_MASTER_KEY
 
-# LITELLM_SALT_KEY, VLLM_API_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY.
+# LITELLM_SALT_KEY, VLLM_API_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST.
 environmentSecrets:
   - litellm-env
 
@@ -63,7 +63,6 @@ envVars:
   REDIS_PORT: "6379"
   PRESIDIO_ANALYZER_API_BASE: http://presidio-analyzer.gateway.svc.cluster.local:3000
   PRESIDIO_ANONYMIZER_API_BASE: http://presidio-anonymizer.gateway.svc.cluster.local:3000
-  LANGFUSE_HOST: http://langfuse-web.langfuse.svc:3000
   # AWS_REGION, BEDROCK_GUARDRAIL_ID and BEDROCK_GUARDRAIL_VERSION are added by argocd/apps/gateway.yaml.
 
 # Migration Job as an Argo CD Sync hook in wave 1, not PreSync:
@@ -148,7 +147,11 @@ proxy_config:
 
   litellm_settings:
     callbacks: ["prometheus"]          # spend and requests per team, scraped by Prometheus
-    success_callback: ["langfuse"]     # one trace per request in Langfuse
+    # Langfuse Cloud is outside the company. turn_off_message_logging keeps prompts and answers out
+    # of it: Langfuse gets the metadata only (team, user, model, tokens, cost, latency, errors).
+    # Company data stays inside. A company that wants the text in its traces self-hosts Langfuse.
+    turn_off_message_logging: true
+    success_callback: ["langfuse"]     # one trace per request in Langfuse Cloud
     failure_callback: ["langfuse"]
     drop_params: true
 

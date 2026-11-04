@@ -56,11 +56,6 @@ locals {
         },
       ]
     }
-    langfuse = {
-      namespace = "langfuse"
-      s3        = { langfuse = local.s3_read_write }
-      extra     = []
-    }
   }
 }
 

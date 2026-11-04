@@ -14,4 +14,4 @@ repo_url      = "https://github.com/<your-user>/self-hosted-llm-qwen-27b.git"
 repo_revision = "main"
 
 # Which apps Argo CD deploys. Leave this out at first; the guide turns them on one at a time:
-# apps = { serving = true, gateway = true, langfuse = true, k8s_assistant = true }
+# apps = { serving = true, gateway = true, k8s_assistant = true }

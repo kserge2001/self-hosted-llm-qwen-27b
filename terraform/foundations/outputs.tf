@@ -16,7 +16,7 @@ output "vpc_id" {
 }
 
 output "buckets" {
-  description = "S3 buckets: model weights, Langfuse events."
+  description = "S3 bucket for the model weights."
   value       = { for k, b in aws_s3_bucket.this : k => b.bucket }
 }
 
@@ -54,6 +54,15 @@ output "secrets_to_fill" {
 output "fill_hf_token" {
   description = "Hugging Face read token (huggingface.co > Settings > Access Tokens). Used by the model loader Job."
   value       = "aws secretsmanager put-secret-value --region ${var.region} --secret-id ${aws_secretsmanager_secret.student["hf-token"].name} --secret-string 'hf_xxx'"
+}
+
+output "fill_langfuse_keys" {
+  description = "Keys of a Langfuse Cloud project (cloud.langfuse.com > your project > Settings > API Keys). host: the region you signed up in."
+  value       = <<-EOT
+    aws secretsmanager put-secret-value --region ${var.region} \
+      --secret-id ${aws_secretsmanager_secret.student["langfuse/cloud"].name} \
+      --secret-string '{"public_key":"pk-lf-...","secret_key":"sk-lf-...","host":"https://cloud.langfuse.com"}'
+  EOT
 }
 
 output "app_image_repo" {
