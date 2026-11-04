@@ -5,7 +5,7 @@
 A rate limit also gives HTTP 429. So look at the `type` field, not at the status code, to know it is the budget.
 
 1. See the spend of every team: `bash scripts/spend-report.sh`
-2. Find out what used the budget. In MLflow (the SageMaker MLflow App, experiment `astra-gateway`), filter the traces by the team and look at the cost. The `user` field shows which person or job sent the requests.
+2. Find out what used the budget. In MLflow (the SageMaker MLflow App, experiment `astra-gateway`), filter the traces by the tag `team:<name>` and look at the cost. The `user` field shows which person or job sent the requests.
 3. Decide with the team:
    - **A mistake** (a loop, a test against the real gateway): the team fixes its code. The budget resets on the date in the report.
    - **Real need**: raise `budget_usd` for the team in `gateway/teams.yaml` and run `python gateway/sync_teams.py --gateway http://localhost:4000` with the gateway port-forwarded. The team's manager approves the change first, because the money comes from their budget.

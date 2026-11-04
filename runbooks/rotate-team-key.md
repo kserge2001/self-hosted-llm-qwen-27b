@@ -22,6 +22,6 @@ The script makes a new key only when the saved key no longer works. So you rotat
    ```
    For `k8s-assistant`: namespace `k8s-assistant`, ExternalSecret `k8s-assistant-gateway-key`, deployment `k8s-assistant`.
 4. Check that the app works (for `k8s-assistant`: the check in its README).
-5. If the key leaked: look in MLflow (experiment `astra-gateway`) for traces from that team before step 1 that you cannot explain.
+5. If the key leaked: look in MLflow (experiment `astra-gateway`) for traces with the tag `team:<name>` from before step 1 that you cannot explain.
 
 **Why delete first:** a leaked key must stop working at once. A short outage for one team is better than a stranger using its budget.

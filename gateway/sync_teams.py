@@ -67,6 +67,9 @@ def team_body(team):
         "budget_duration": BUDGET_DURATION,
         "rpm_limit": int(team["rpm"]),
         "tpm_limit": int(team["tpm"]),
+        # LiteLLM adds a team's metadata tags to every request of that team, so each MLflow trace
+        # carries the tag team:<name>. That is how you find one team's traces in MLflow.
+        "metadata": {"tags": [f"team:{team['name']}"]},
     }
 
 
@@ -79,7 +82,15 @@ def existing_teams(gw):
 
 
 def needs_update(current, wanted):
-    return any(current.get(k) != v for k, v in wanted.items() if k != "team_alias")
+    for k, v in wanted.items():
+        if k == "team_alias":
+            continue
+        if k == "metadata":  # LiteLLM keeps more keys in metadata; compare only the tags we set
+            if (current.get("metadata") or {}).get("tags") != v["tags"]:
+                return True
+        elif current.get(k) != v:
+            return True
+    return False
 
 
 def read_team_key(sm, team_name):

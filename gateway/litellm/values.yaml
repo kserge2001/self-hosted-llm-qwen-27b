@@ -15,7 +15,7 @@ numWorkers: 1
 
 serviceAccount:
   create: true
-  name: litellm           # EKS Pod Identity: bedrock:ApplyGuardrail on astra-guardrail
+  name: litellm           # EKS Pod Identity: bedrock:ApplyGuardrail, and sagemaker:CallMlflowAppApi for traces
 
 # Wave 2: start after the secrets (wave -1) and the database migration (wave 1).
 deploymentAnnotations:

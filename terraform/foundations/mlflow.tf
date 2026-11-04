@@ -1,6 +1,6 @@
 # MLflow on Amazon SageMaker AI: a serverless MLflow App, named `astra`, in your own AWS account.
-# The gateway (LiteLLM) sends one trace per request to it: the prompt, the answer, the team, the user,
-# tokens, cost, latency and errors. The traces never leave your account. The same App can also be the
+# The gateway (LiteLLM) sends one trace per request to it: the request, the answer and what LiteLLM
+# adds, plus a tag team:<name> (gateway/sync_teams.py sets it). The traces never leave your account. The same App can also be the
 # model registry of a company pipeline (05-model-pipeline explains it).
 # AWS runs the server and its metadata database. We own only the artifact bucket and one role.
 #
