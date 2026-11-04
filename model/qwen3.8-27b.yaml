@@ -4,7 +4,7 @@
 name: qwen3.8-27b                     # the folder in the models bucket
 hf_repo: Qwen/Qwen3.8-27B-FP8
 # One exact Hugging Face commit, so the weights we test are the weights we serve.
-revision: 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a   # checked 2026-10-28
+revision: 001718aae4c6e7936ec1999ab8501da0c045af82   # the canary test, 2026-11-04
 license: apache-2.0                   # scan.py stops if Hugging Face reports a different license
 
 # Only what vLLM needs. Weights must be .safetensors: download.py refuses any other weight file.
