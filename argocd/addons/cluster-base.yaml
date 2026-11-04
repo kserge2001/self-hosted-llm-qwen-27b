@@ -1,0 +1,43 @@
+# Cluster basics every app needs (platform/cluster-base): the default gp3 StorageClass and the
+# Argo CD Ingress (argocd.<domain>; Terraform installs Argo CD without one).
+# Not an optional add-on, so it selects every cluster Terraform registered (label cluster_name).
+# Wave -1: first of all.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cluster-base
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: cluster_name
+              operator: Exists
+  template:
+    metadata:
+      name: cluster-base
+      annotations:
+        argocd.argoproj.io/sync-wave: "-1"
+    spec:
+      project: default
+      source:
+        repoURL: '{{metadata.annotations.repo_url}}'
+        targetRevision: '{{metadata.annotations.repo_revision}}'
+        path: platform/cluster-base
+        helm:
+          valuesObject:
+            domain: '{{metadata.annotations.domain}}'
+            certificateArn: '{{metadata.annotations.acm_certificate_arn}}'
+      destination:
+        server: '{{server}}'
+        namespace: default
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        retry:
+          limit: 10
+          backoff: {duration: 30s, factor: 2, maxDuration: 5m}

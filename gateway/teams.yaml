@@ -1,0 +1,22 @@
+# The teams that use Astra. After a change here, run gateway/sync_teams.py: it creates or updates
+# each team in LiteLLM and gives each team one key (stored in astra/teams/<team>).
+#   budget_usd: spend allowed per 30 days, at the internal price per token
+#   rpm / tpm:  requests and tokens per minute for the whole team
+# Removing a team here does not delete it in LiteLLM; delete it by hand after its apps stop.
+teams:
+  - name: hr-assistant
+    budget_usd: 50
+    rpm: 60
+    tpm: 200000
+  - name: support-bot
+    budget_usd: 150
+    rpm: 300
+    tpm: 1000000
+  - name: platform-loadtest
+    budget_usd: 50
+    rpm: 10000
+    tpm: 50000000
+  - name: intern-sandbox
+    budget_usd: 0.01
+    rpm: 5
+    tpm: 20000

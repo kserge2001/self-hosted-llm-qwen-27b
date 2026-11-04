@@ -1,0 +1,35 @@
+# ":latest" or no tag means the image can change without a change in Git.
+# Audit: violations show up in PolicyReports (kubectl get policyreport -A); nothing is blocked.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: require-pinned-image-tags
+  annotations:
+    policies.kyverno.io/title: Require pinned image tags
+spec:
+  validationActions: [Audit]
+  failurePolicy: Ignore
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, kyverno]
+  variables:
+    - name: allContainers
+      expression: >-
+        object.spec.containers +
+        (has(object.spec.initContainers) ? object.spec.initContainers : []) +
+        (has(object.spec.ephemeralContainers) ? object.spec.ephemeralContainers : [])
+  validations:
+    # A tag after the last "/" (so "registry:5000/app" does not count), or a digest.
+    - expression: >-
+        variables.allContainers.all(c,
+          c.image.matches('^.+(@sha256:[a-f0-9]{64}|:[^/:@]+)$') &&
+          !c.image.endsWith(':latest'))
+      message: "Every image needs a fixed tag (not :latest) or a digest."

@@ -1,0 +1,114 @@
+{{- $useKeda := and .Values.autoscaling.enabled (not .Values.canary) -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vllm.fullname" . }}
+  labels:
+    {{- include "vllm.labels" . | nindent 4 }}
+spec:
+  {{- if not $useKeda }}
+  replicas: {{ ternary 1 .Values.replicas .Values.canary }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 3600     # a new GPU node plus the weights takes longer than the 600s default
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                   # one new replica (one new GPU node) before an old one stops
+      maxUnavailable: 0             # never drop below the serving count during a change
+  selector:
+    matchLabels:
+      {{- include "vllm.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vllm.labels" . | nindent 8 }}
+        astra/model-revision: {{ .Values.model.revision | trunc 63 | quote }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      # Without this, Kubernetes injects VLLM_PORT=tcp://... for the Service named "vllm",
+      # and vLLM reads it as its own setting and refuses to start.
+      enableServiceLinks: false
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule    # the replicas must be in different zones
+          labelSelector:
+            matchLabels:
+              {{- include "vllm.selectorLabels" . | nindent 14 }}
+      containers:
+        - name: vllm
+          image: "{{ .Values.image.repository }}:{{ required "image.tag is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["vllm", "serve"]
+          args:
+            - {{ include "vllm.modelUri" . | quote }}
+            - --served-model-name={{ .Values.model.servedName }}
+            - --load-format={{ .Values.loader.format }}
+            - --model-loader-extra-config={{ dict "concurrency" (int .Values.loader.concurrency) "memory_limit" (int64 .Values.loader.memoryLimitBytes) | toJson }}
+            - --port={{ .Values.service.port }}
+            {{- range .Values.args }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            # vLLM reads the key from this variable, so it never shows in the process arguments.
+            - name: VLLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.apiKey.secretName }}
+                  key: api-key
+            # The streamer finds the bucket region here; credentials come from EKS Pod Identity.
+            - name: AWS_REGION
+              value: {{ .Values.region }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ .Values.region }}
+            # Config and tokenizer come from the same S3 folder; never reach out to Hugging Face.
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: shm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep {{ .Values.preStopSleepSeconds }}"]
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Values.shmSize }}

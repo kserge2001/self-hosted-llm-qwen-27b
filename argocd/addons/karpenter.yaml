@@ -1,0 +1,46 @@
+# Karpenter NodePools and EC2NodeClasses (platform/karpenter).
+# Terraform installs the Karpenter controller itself (on the system nodes); this only says
+# WHICH machines it may start. Wave 0: GPU and extra nodes are needed by later add-ons.
+# Sync waves order only what the root app "platform" applies (these ApplicationSets). The Applications
+# they generate converge on their own: retry with backoff, plus SkipDryRunOnMissingResource where a CRD
+# comes from another app.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: karpenter-nodepools
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: true   # deleting the ApplicationSet does not delete the NodePools
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: enable_karpenter_nodepools
+              operator: In
+              values: ["true"]
+  template:
+    metadata:
+      name: karpenter-nodepools
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+    spec:
+      project: default
+      source:
+        repoURL: '{{metadata.annotations.repo_url}}'
+        targetRevision: '{{metadata.annotations.repo_revision}}'
+        path: platform/karpenter
+        helm:
+          valuesObject:
+            clusterName: '{{metadata.annotations.aws_cluster_name}}'
+            nodeRole: '{{metadata.annotations.karpenter_node_role}}'
+      destination:
+        server: '{{server}}'
+        namespace: kube-system
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        retry:
+          limit: 10
+          backoff: {duration: 30s, factor: 2, maxDuration: 5m}

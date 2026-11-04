@@ -1,0 +1,60 @@
+# ExternalDNS: writes a Route 53 record for every Ingress host (grafana.<domain>, ...).
+# Wave 2: after the load balancer controller, which gives the Ingress its ALB address.
+# Sync waves order only what the root app "platform" applies (these ApplicationSets). The Applications
+# they generate converge on their own: retry with backoff, plus SkipDryRunOnMissingResource where a CRD
+# comes from another app.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: external-dns
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: enable_external_dns
+              operator: In
+              values: ["true"]
+  template:
+    metadata:
+      name: external-dns
+      annotations:
+        argocd.argoproj.io/sync-wave: "2"
+    spec:
+      project: default
+      source:
+        repoURL: https://kubernetes-sigs.github.io/external-dns
+        chart: external-dns
+        targetRevision: 1.23.0            # latest stable (app v0.23.0), checked 2026-10-28
+        helm:
+          releaseName: external-dns
+          valuesObject:
+            provider:
+              name: aws
+            env:
+              - name: AWS_DEFAULT_REGION
+                value: '{{metadata.annotations.aws_region}}'
+            serviceAccount:
+              name: external-dns          # Pod Identity is linked to this name (terraform/foundations/pod-identity.tf)
+            sources: [ingress, service]
+            domainFilters: ['{{metadata.annotations.domain}}']   # touch only our zone
+            policy: sync                  # also deletes records when an Ingress is deleted
+            registry: txt
+            txtOwnerId: '{{metadata.annotations.aws_cluster_name}}'   # never touch records made by others
+            resources:
+              requests: {cpu: 20m, memory: 64Mi}
+              limits: {memory: 128Mi}
+      destination:
+        server: '{{server}}'
+        namespace: external-dns
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        retry:
+          limit: 10
+          backoff: {duration: 30s, factor: 2, maxDuration: 5m}

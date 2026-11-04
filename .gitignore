@@ -1,11 +1,20 @@
 build/
 *.bak
-1-foundations/**/.terraform/
-1-foundations/**/*.tfstate*
-1-foundations/**/terraform.tfvars
-1-foundations/**/tfplan
-1-foundations/terraform/backend.hcl
+
+# Terraform: local cache, state, your values, saved plans, the generated backend file
+**/.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+tfplan
+terraform/foundations/backend.hcl
+
 # Python
 __pycache__/
+.pytest_cache/
 .ruff_cache/
 .venv/
+
+# Local secrets
+.env
+*.pem

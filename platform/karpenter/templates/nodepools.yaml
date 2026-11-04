@@ -1,0 +1,74 @@
+# Which GPU machines Karpenter may start, and the spend ceiling.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu
+spec:
+  template:
+    metadata:
+      labels:
+        workload: llm-inference
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: gpu
+      requirements:
+        # Three g6e sizes, each with ONE NVIDIA L40S 48 GB. Karpenter starts the cheapest one
+        # in stock, so a zone out of g6e.xlarge gets a g6e.2xlarge instead of no node.
+        #   g6e.xlarge $1.861/h   g6e.2xlarge $2.242/h   g6e.4xlarge $3.004/h   (us-east-1, October 2026)
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["g6e.xlarge", "g6e.2xlarge", "g6e.4xlarge"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]           # a spot reclaim would stop serving mid-request
+      taints:
+        - key: nvidia.com/gpu
+          effect: NoSchedule              # only pods that tolerate it land on a GPU node
+      expireAfter: 336h                   # replace every node within 14 days: fresh, patched image
+  limits:
+    # 2 serving replicas + 1 surge pod in a rolling update + 1 canary. This is
+    # also the spend ceiling: at most 4 GPU nodes. A pod over the limit waits (Pending).
+    nvidia.com/gpu: 4
+  disruption:
+    consolidationPolicy: WhenEmpty        # never move a busy model server to save money
+    consolidateAfter: 10m
+    budgets:
+      - nodes: "1"                        # voluntary changes take one GPU node at a time
+---
+# Everything else that does not fit on the system nodes: the model loader Job, the apps, add-ons.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: general
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: general
+      requirements:
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "m", "r"]
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["5"]
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["large", "xlarge", "2xlarge"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]   # spot first when it is cheaper; these pods can restart
+      expireAfter: 336h
+  limits:
+    cpu: "32"                             # lab ceiling
+    memory: 128Gi
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 2m

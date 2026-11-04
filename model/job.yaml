@@ -1,0 +1,79 @@
+# The model loader: one Kubernetes Job that copies one model version from Hugging Face to S3.
+#   1. download.py  the exact revision in qwen3.8-27b.yaml, only the file types it allows
+#   2. scan.py      safetensors only, valid safetensors headers, modelscan, the license matches
+#   3. upload.py    every file to s3://astra-models-<account>/<name>/<revision>/, then SHA256SUMS last
+# It runs inside the cluster, so the 31 GB never pass through your laptop, and it uses the
+# model-loader role (EKS Pod Identity): write the models bucket, read astra/hf-token. No keys.
+#
+# Start it:   kubectl apply -k model/
+# Watch it:   kubectl -n models logs -f job/model-loader
+# Run again (a new revision):  kubectl -n models delete job model-loader, then apply again.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: models
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-loader       # Terraform links this name to the model-loader IAM role (pod-identity.tf)
+  namespace: models
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-loader
+  namespace: models
+spec:
+  backoffLimit: 1                  # one retry, for a network error
+  activeDeadlineSeconds: 10800     # stop after 3 hours, whatever happens
+  ttlSecondsAfterFinished: 86400   # the finished Job and its logs stay for one day
+  template:
+    spec:
+      serviceAccountName: model-loader
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000              # lets user 1000 write to the work disk
+      containers:
+        - name: loader
+          image: python:3.12.16-slim   # Python 3.12: modelscan 0.8.8 does not install on 3.13. Checked 2026-10-28.
+          workingDir: /work            # modelscan writes its report here
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              export HOME=/work PATH="/work/.local/bin:$PATH"
+              pip install --quiet --user --no-warn-script-location -r /loader/requirements.txt
+              python /loader/download.py --spec /loader/model.yaml --out /work/model
+              python /loader/scan.py     --spec /loader/model.yaml --dir /work/model
+              python /loader/upload.py   --spec /loader/model.yaml --dir /work/model
+          env:
+            # Change this if you built in another region. boto3 needs it to find Secrets Manager.
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: HF_HUB_DISABLE_PROGRESS_BARS
+              value: "1"               # plain log lines instead of progress bars
+          resources:
+            requests: {cpu: "2", memory: 8Gi}
+            limits: {memory: 8Gi}
+          volumeMounts:
+            - name: loader
+              mountPath: /loader
+              readOnly: true
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: loader                 # the scripts and the model spec, from kustomization.yaml
+          configMap:
+            name: model-loader
+        - name: work                   # a 100 GiB disk for this pod only; deleted with the pod
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                storageClassName: gp3
+                resources:
+                  requests:
+                    storage: 100Gi

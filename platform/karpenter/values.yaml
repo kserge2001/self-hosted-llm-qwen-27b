@@ -1,0 +1,9 @@
+# clusterName and nodeRole come from the cluster Secret annotations
+# aws_cluster_name and karpenter_node_role (an IAM role NAME, not an ARN).
+clusterName: astra
+nodeRole: astra-karpenter-node
+
+# Bottlerocket: small, read-only OS. Its NVIDIA variant has the driver and the
+# NVIDIA device plugin built in, so no GPU Operator is needed.
+# Pinned (not @latest) so a new AMI only arrives through a change in Git.
+amiAlias: bottlerocket@v1.68.0          # latest Bottlerocket release, checked 2026-10-28

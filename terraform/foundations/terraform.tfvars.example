@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+
+region = "us-east-1"
+name   = "astra"
+
+# A public Route 53 hosted zone in this account.
+domain = "lab.example.com"
+
+# Your public IP, from:  curl -s https://checkip.amazonaws.com
+admin_cidrs = ["203.0.113.7/32"]
+
+# Your own repository, made from the starter. Argo CD reads argocd/ from here.
+repo_url      = "https://github.com/<your-user>/<your-repo>.git"
+repo_revision = "main"

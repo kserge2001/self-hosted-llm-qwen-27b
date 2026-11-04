@@ -1,0 +1,33 @@
+# Argo CD can pull a Helm chart from an OCI registry only if the registry is declared as a Helm
+# repository with enableOCI. Public registries: no credentials.
+# Wave -2: before the ApplicationSets that use them (cert-manager, ClickHouse operator).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-quay-jetstack-charts
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+stringData:
+  name: jetstack-charts
+  type: helm
+  url: quay.io/jetstack/charts
+  enableOCI: "true"
+---
+# ClickHouse operator chart. Langfuse runs its ClickHouse through this operator.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-ghcr-clickhouse
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+stringData:
+  name: clickhouse-charts
+  type: helm
+  url: ghcr.io/clickhouse
+  enableOCI: "true"

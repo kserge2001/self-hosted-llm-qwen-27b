@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - externalsecret.yaml
+  - deployment.yaml
+images:
+  # Deploying a new version = pushing an image with a new tag, then changing newTag here and pushing.
+  # Argo CD sets the repository (newName) to the ECR repository Terraform made.
+  - name: k8s-assistant
+    newTag: "0.1.0"

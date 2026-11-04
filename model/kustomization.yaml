@@ -1,0 +1,17 @@
+# kubectl apply -k model/  builds the ConfigMap below from these files and applies job.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - job.yaml
+configMapGenerator:
+  - name: model-loader
+    namespace: models
+    files:
+      - model.yaml=qwen3.8-27b.yaml        # the model spec, mounted as /loader/model.yaml
+      - loader/spec.py
+      - loader/download.py
+      - loader/scan.py
+      - loader/upload.py
+      - loader/requirements.txt
+generatorOptions:
+  disableNameSuffixHash: true   # a fixed name, so job.yaml can point at it

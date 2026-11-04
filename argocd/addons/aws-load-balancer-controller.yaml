@@ -1,0 +1,65 @@
+# AWS Load Balancer Controller: turns every Ingress with class "alb" into rules on ONE
+# internal ALB (group astra-internal). Wave 1: before any add-on that has an Ingress.
+# Sync waves order only what the root app "platform" applies (these ApplicationSets). The Applications
+# they generate converge on their own: retry with backoff, plus SkipDryRunOnMissingResource where a CRD
+# comes from another app.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: aws-load-balancer-controller
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: enable_aws_load_balancer_controller
+              operator: In
+              values: ["true"]
+  template:
+    metadata:
+      name: aws-load-balancer-controller
+      annotations:
+        argocd.argoproj.io/sync-wave: "1"
+    spec:
+      project: default
+      source:
+        repoURL: https://aws.github.io/eks-charts
+        chart: aws-load-balancer-controller
+        targetRevision: 3.6.2             # latest stable, checked 2026-10-28
+        helm:
+          releaseName: aws-load-balancer-controller
+          valuesObject:
+            clusterName: '{{metadata.annotations.aws_cluster_name}}'
+            region: '{{metadata.annotations.aws_region}}'    # set so the pod never needs the EC2 metadata service
+            vpcId: '{{metadata.annotations.aws_vpc_id}}'
+            serviceAccount:
+              name: aws-load-balancer-controller   # Pod Identity is linked to this name (terraform/foundations/pod-identity.tf)
+            replicaCount: 2               # its webhook blocks Service creation when it is down
+            # IngressClass "alb" carries the shared settings, so every Ingress in every stage
+            # lands on the same internal ALB even if it forgets the annotations.
+            createIngressClassResource: true
+            ingressClass: alb
+            ingressClassParams:
+              create: true
+              name: alb
+              spec:
+                scheme: internal
+                group:
+                  name: astra-internal
+            resources:
+              requests: {cpu: 50m, memory: 128Mi}
+              limits: {memory: 256Mi}
+      destination:
+        server: '{{server}}'
+        namespace: kube-system
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [ServerSideApply=true]
+        retry:
+          limit: 10
+          backoff: {duration: 30s, factor: 2, maxDuration: 5m}

@@ -1,5 +1,0 @@
-apiVersion: v2
-name: arc-config
-description: GitHub App Secret, service account and RBAC for the arc-runner scale set
-type: application
-version: 0.1.0

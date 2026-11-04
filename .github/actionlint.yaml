@@ -1,4 +1,0 @@
-# Tell actionlint about the label of the self-hosted ARC runners in the cluster.
-self-hosted-runner:
-  labels:
-    - arc-runner

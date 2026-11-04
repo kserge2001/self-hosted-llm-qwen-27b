@@ -1,28 +1,39 @@
-# Astra: an internal inference API on Amazon EKS
+# Astra: an internal inference API on Amazon EKS (reference solution)
 
-Astra is the company's own AI model API. Apps call it like OpenAI, with a base URL, a team key and the model name `astra`, but the model (Qwen3.8-27B) runs on the company's own GPUs in its own AWS account.
+Astra is a company's own AI model API. Apps call it like OpenAI, with a base URL, a team key and the model name `astra`, but the model (Qwen3.8-27B) runs on the company's own GPUs in its own AWS account.
 
-## The stages
+This repository is the **finished build**. The guide on kodelumi walks you through creating each of these files yourself, in a near-empty repository made from the starter. Use this one to compare, or to copy a long file the guide points to.
 
-You build Astra in eight stages, one folder each. Each stage ends with a check. Do not start the next stage before the check passes.
+## Who does what
 
-| Folder | What it builds | Who owns it in a company | The check that ends it |
-|---|---|---|---|
-| `1-foundations/` | the Terraform state bucket, then the network, EKS, Karpenter, IAM, S3, RDS, secrets, the certificate, the Bedrock guardrail, the MLflow registry (SageMaker MLflow App) and Argo CD | cloud platform team | `kubectl get nodes` works and Argo CD shows the `platform` app |
-| `2-platform/` | the add-ons through Argo CD: Karpenter NodePools, Kyverno, External Secrets, monitoring, GitHub runners, the database setup Job | platform team | every add-on app in Argo CD is Synced and Healthy |
-| `3-model-pipeline/` | download, scan, upload to S3, register in MLflow, eval gate, promotion pull request | ML engineers (MLOps) | the model version in MLflow has the alias `champion` |
-| `4-serving/` | vLLM from our own Helm chart, serving the model as `astra` | ML platform team | `/v1/models` on `vllm.serving.svc:8000` lists `astra` |
-| `5-gateway/` | the LiteLLM gateway with team keys, budgets, guardrails, and Langfuse traces | AI platform team | a call to `https://astra.<domain>/v1` with a team key answers, and the trace shows in Langfuse |
-| `6-app/k8s-assistant/` | an app that answers questions about the cluster, with its own CI and promptfoo tests | an app team | `/ask` names the right pods, and the promptfoo job is green |
-| `7-operate/` | spend report, canary release, teardown, runbooks | platform team and on-call | a canary was promoted or rolled back, and teardown left nothing behind |
-| `8-production/` | nothing to build: what a company changes before go-live | architects and security | you can say why each change is needed |
+| Who | What it does here |
+|---|---|
+| You, with `terraform` | `terraform/bootstrap` (the state bucket), then `terraform/foundations`: VPC, EKS, Karpenter, IAM, S3, ECR, RDS, secrets, the certificate, the Bedrock guardrail, Argo CD and its one root app |
+| Argo CD | applies every file under `argocd/` from your repository, and keeps the cluster equal to Git. You never run `helm install`. |
+| You, with `kubectl` | start the model loader Job (`model/`), look at things, port-forward to the UIs |
+| You, with scripts | `gateway/sync_teams.py` (team keys), `scripts/canary.sh`, `scripts/load.sh`, `scripts/spend-report.sh`, `scripts/teardown.sh` |
+| You, with `docker` | build the app image and push it to ECR |
 
-`.github/workflows/` holds the CI of the stages: `ci.yml`, `model-promote.yml`, `gateway-teams.yml` and `app-ci.yml`.
+There is no CI in this build. Every step is a command you run, so you see each one happen. The guide explains what a company automates and how.
+
+## Folders
+
+| Folder | What it holds | Read by |
+|---|---|---|
+| `terraform/bootstrap/` | the S3 bucket for Terraform state | you (`terraform apply`) |
+| `terraform/foundations/` | the AWS account side of the platform | you (`terraform apply`) |
+| `argocd/addons/` | one ApplicationSet per shared tool: External Secrets, LB controller, ExternalDNS, Karpenter NodePools, Kyverno, KEDA, monitoring, cert-manager, ClickHouse operator, db-init | Argo CD |
+| `argocd/apps/` | one ApplicationSet per app: `serving`, `gateway`, `langfuse`, `k8s-assistant` (and `serving-canary` during a canary) | Argo CD |
+| `platform/` | small charts the add-ons use: cluster basics, NodePools, policies, dashboards, the database Job | Argo CD |
+| `model/` | the model spec and the loader Job: download, scan, upload to S3 | you (`kubectl apply -k`) |
+| `serving/` | our vLLM Helm chart and the values of the version that serves | Argo CD |
+| `gateway/` | LiteLLM, Langfuse and Presidio settings, `teams.yaml`, `sync_teams.py` | Argo CD, and you for the teams |
+| `apps/k8s-assistant/` | an app that uses Astra: code, tests, Dockerfile, Kubernetes manifests | you (docker), Argo CD (deploy) |
+| `scripts/` | canary, test traffic, spend report, teardown | you |
+| `runbooks/` | what to do when something goes wrong | you |
 
 ## Cost
 
-The GPU machines cost the most: a g6e.xlarge costs about $1.86 an hour (us-east-1, on-demand, October 2026). With the cluster, the NAT gateway, the database and the small machines, the lab costs a few dollars an hour while it runs. MLflow is the serverless SageMaker MLflow App: it has no extra charge, you pay only for its S3 bucket (checked 2026-10-28). Run `7-operate/scripts/teardown.sh` when you stop.
+The GPU nodes cost the most: a g6e.xlarge costs $1.861 an hour (us-east-1, on-demand, October 2026). Two of them run all the time, plus one more during a canary. With the cluster, the NAT gateway, the database and the small nodes, the build costs a few dollars an hour while it runs. Run `scripts/teardown.sh` when you stop.
 
-## The guide
-
-The step-by-step guide is on kodelumi. It explains each stage, each decision and each command. This repository holds the code the guide builds.
+GPU instances need a quota ("Running On-Demand G and VT instances") and free capacity in the region. Check both before you start.

@@ -1,0 +1,6 @@
+# Pinned to the latest release on PyPI, checked 2026-10-28.
+# Use Python 3.12: modelscan 0.8.8 does not install on 3.13.
+boto3==1.43.120
+huggingface_hub==2.3.0
+modelscan==0.8.8
+PyYAML==6.0.3

@@ -1,0 +1,33 @@
+# Grafana admin password. Terraform makes no Secrets Manager entry for it, so External Secrets
+# generates a random one inside the cluster (the chart default would be "prom-operator").
+# Read it with:
+#   kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: grafana-admin
+spec:
+  length: 24
+  digits: 4
+  symbols: 0                     # no symbols: easy to paste into a login form
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: grafana-admin
+spec:
+  refreshPolicy: CreatedOnce     # generate once; a new password on every refresh would lock you out
+  target:
+    name: grafana-admin
+    template:
+      data:
+        admin-user: admin
+        admin-password: {{ `"{{ .password }}"` }}   # ESO template, kept literal by Helm
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: grafana-admin

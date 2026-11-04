@@ -1,0 +1,122 @@
+# Defaults for one vLLM release. The model and image are set in serving/values/<model>.yaml.
+
+image:
+  repository: vllm/vllm-openai
+  tag: ""                 # required: set in the model values file
+  pullPolicy: IfNotPresent
+
+# The weights to serve: s3://<modelsBucket>/<model.name>/<model.revision>/.
+# The Job in model/ puts them there. Argo CD sets modelsBucket from the cluster Secret.
+modelsBucket: ""
+model:
+  name: ""                # the folder in the bucket, for example qwen3.8-27b
+  revision: ""            # the Hugging Face commit; also shown as a pod label
+  servedName: astra       # the name apps and the gateway use; never the real model name
+
+# Run:ai Model Streamer reads safetensors from S3 straight into GPU memory, no copy to disk.
+loader:
+  format: runai_streamer
+  concurrency: 16         # parallel S3 connections
+  memoryLimitBytes: 5368709120   # 5 GiB CPU buffer; without a limit the buffer can pass the pod memory limit
+
+# Flags after the model. The proven set from the first build (vLLM v0.31.0).
+args:
+  - --max-model-len=32768
+  - --gpu-memory-utilization=0.92
+  - --max-num-seqs=128
+  - --language-model-only
+  - --reasoning-parser=qwen3
+  - --enable-auto-tool-choice
+  - --tool-call-parser=qwen3_coder
+  - '--default-chat-template-kwargs={"enable_thinking": false}'
+
+extraEnv: []
+
+region: us-east-1
+
+# A canary is a second release (for example "vllm-canary") with a new model.
+# It runs one replica, and the gateway sends it a small weight of the traffic.
+# It reuses the stable release's service account and API key Secret, so it creates neither.
+canary: false
+
+replicas: 2               # used only when autoscaling is off
+
+autoscaling:
+  enabled: true
+  minReplicas: 2          # one per zone, always
+  maxReplicas: 3          # GPU NodePool limit is 4: 3 here + 1 surge pod or 1 canary
+  # Requests waiting for a GPU, per replica. Above this KEDA adds a replica.
+  waitingPerReplica: "5"
+  pollingInterval: 30
+  cooldownPeriod: 900     # a new GPU node takes 10+ minutes; do not drop it right after
+  # kube-prometheus-stack Prometheus service in the monitoring namespace (argocd/addons/monitoring.yaml).
+  prometheusAddress: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+
+serviceAccount:
+  create: true
+  name: vllm              # EKS Pod Identity is bound to this name (S3 read on the models bucket)
+
+apiKey:
+  secretName: vllm-api-key
+  createExternalSecret: true
+  remoteKey: astra/vllm/api-key
+  secretStore: aws-secrets-manager   # ClusterSecretStore from platform/external-secrets
+  refreshInterval: 1h
+
+service:
+  port: 8000
+
+resources:
+  requests:
+    cpu: "3"
+    memory: 24Gi
+    nvidia.com/gpu: 1
+  limits:
+    memory: 28Gi
+    nvidia.com/gpu: 1
+
+shmSize: 2Gi              # NCCL and PyTorch workers use /dev/shm; the container default is 64Mi
+
+nodeSelector:
+  karpenter.sh/nodepool: gpu
+
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+terminationGracePeriodSeconds: 120
+preStopSleepSeconds: 30   # leave the Service first, let answers in progress finish
+
+probes:
+  startup:
+    periodSeconds: 15
+    failureThreshold: 80  # up to 20 minutes to stream weights and warm up
+  readiness:
+    periodSeconds: 10
+    failureThreshold: 3
+  liveness:
+    periodSeconds: 30
+    failureThreshold: 3
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+
+prometheusRule:
+  enabled: true
+
+# Only these namespaces can open port 8000. Apps must go through the gateway.
+networkPolicy:
+  enabled: true
+  allowNamespaces:
+    - gateway
+    - monitoring
+
+dashboard:
+  enabled: true
+  namespace: monitoring   # the Grafana sidecar loads ConfigMaps labelled grafana_dashboard=1
