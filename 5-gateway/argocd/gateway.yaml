@@ -1,0 +1,66 @@
+# Stage 5: the LiteLLM gateway, Redis and Presidio in namespace "gateway".
+# Apply once:  kubectl apply -f 5-gateway/argocd/gateway.yaml
+# An ApplicationSet with the cluster generator makes one Application named "gateway". It fills the
+# domain, certificate, region and guardrail id from the cluster Secret Terraform made (GitOps Bridge).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gateway
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: gateway
+    spec:
+      project: default
+      sources:
+        # Official LiteLLM chart, latest stable checked 2026-10-28.
+        - repoURL: ghcr.io/berriai
+          chart: litellm-helm
+          targetRevision: 1.106.5
+          helm:
+            releaseName: litellm      # Service litellm:4000
+            valueFiles:
+              - $repo/5-gateway/litellm/values.yaml
+            valuesObject:
+              envVars:
+                AWS_REGION: '{{ .metadata.annotations.aws_region }}'
+                BEDROCK_GUARDRAIL_ID: '{{ .metadata.annotations.bedrock_guardrail_id }}'
+                BEDROCK_GUARDRAIL_VERSION: '{{ .metadata.annotations.bedrock_guardrail_version }}'
+              ingress:
+                annotations:
+                  alb.ingress.kubernetes.io/certificate-arn: '{{ .metadata.annotations.acm_certificate_arn }}'
+                hosts:
+                  - host: 'astra.{{ .metadata.annotations.domain }}'
+                    paths:
+                      - path: /v1
+                        pathType: Prefix
+                      - path: /health
+                        pathType: Prefix
+        # This repo: the values file above, plus plain manifests (secrets, Redis, Presidio).
+        - repoURL: '{{ .metadata.annotations.repo_url }}'
+          targetRevision: '{{ .metadata.annotations.repo_revision }}'
+          ref: repo                   # gives $repo to the valueFiles above
+        - repoURL: '{{ .metadata.annotations.repo_url }}'
+          targetRevision: '{{ .metadata.annotations.repo_revision }}'
+          path: 5-gateway/litellm/manifests
+        - repoURL: '{{ .metadata.annotations.repo_url }}'
+          targetRevision: '{{ .metadata.annotations.repo_revision }}'
+          path: 5-gateway/presidio
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: gateway
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

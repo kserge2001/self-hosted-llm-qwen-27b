@@ -1,0 +1,41 @@
+{{- if and .Values.prometheusRule.enabled (not .Values.canary) }}
+# The alerts an on-call engineer is paged for. Each one names what users see.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "vllm.fullname" . }}
+  labels:
+    {{- include "vllm.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: astra-serving
+      rules:
+        - alert: AstraCapacityDegraded
+          expr: kube_deployment_status_replicas_available{namespace="{{ .Release.Namespace }}", deployment="{{ include "vllm.fullname" . }}"} < 2
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: Fewer than 2 model replicas for 10 minutes. One more failure means Astra is down.
+        - alert: AstraQueueBacklog
+          expr: sum(vllm:num_requests_waiting{namespace="{{ .Release.Namespace }}"}) > 10
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: More than 10 requests waiting for a GPU for 5 minutes. Users see slow first words.
+        - alert: AstraSlowFirstToken
+          expr: histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket{namespace="{{ .Release.Namespace }}"}[5m]))) > 5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: 95% of answers no longer start within 5 seconds (10 minutes).
+        - alert: AstraKVCacheFull
+          expr: max(vllm:kv_cache_usage_perc{namespace="{{ .Release.Namespace }}"}) > 0.95
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: GPU memory for conversations above 95% for 10 minutes. Requests are queued.
+{{- end }}

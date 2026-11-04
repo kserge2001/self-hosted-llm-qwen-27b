@@ -1,0 +1,69 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "list_pods",
+      "description": "List the pods in a namespace with phase, readiness, restarts and waiting reason.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "Kubernetes namespace"
+          }
+        },
+        "required": [
+          "namespace"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "describe_deployment",
+      "description": "Show one deployment: replicas, ready replicas, images and conditions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "Kubernetes namespace"
+          },
+          "name": {
+            "type": "string",
+            "description": "Deployment name"
+          }
+        },
+        "required": [
+          "namespace",
+          "name"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "recent_events",
+      "description": "Show the newest events in a namespace (warnings, scheduling, restarts).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "description": "Kubernetes namespace"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "How many events, 1 to 50",
+            "default": 20
+          }
+        },
+        "required": [
+          "namespace"
+        ]
+      }
+    }
+  }
+]

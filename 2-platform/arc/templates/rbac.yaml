@@ -1,0 +1,66 @@
+# The runner pods' identity. Terraform links it (EKS Pod Identity) to the models bucket and
+# a few Secrets Manager entries (CONTRACT.md).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: arc-runner
+---
+# model-pipeline: the pipeline starts the eval Job, waits for it and reads its logs.
+# No ConfigMaps: the eval settings go into the Job itself (envsubst in the workflow).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: arc-runner
+  namespace: model-pipeline
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [get, list, watch]                           # to explain a failed Job
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: arc-runner
+  namespace: model-pipeline
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: arc-runner
+subjects:
+  - kind: ServiceAccount
+    name: arc-runner
+    namespace: {{ .Release.Namespace }}
+---
+# gateway: read only (check LiteLLM is up after a change). No Secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: arc-runner-read
+  namespace: gateway
+rules:
+  - apiGroups: ["", apps]
+    resources: [pods, pods/log, services, endpoints, configmaps, deployments, replicasets]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: arc-runner-read
+  namespace: gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: arc-runner-read
+subjects:
+  - kind: ServiceAccount
+    name: arc-runner
+    namespace: {{ .Release.Namespace }}

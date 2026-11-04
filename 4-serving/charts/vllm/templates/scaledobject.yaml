@@ -1,0 +1,33 @@
+{{- if and .Values.autoscaling.enabled (not .Values.canary) }}
+# Scale on the queue, not CPU: a full GPU shows as requests waiting for a slot.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "vllm.fullname" . }}
+  labels:
+    {{- include "vllm.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "vllm.fullname" . }}
+  minReplicaCount: {{ .Values.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.autoscaling.maxReplicas }}
+  pollingInterval: {{ .Values.autoscaling.pollingInterval }}
+  cooldownPeriod: {{ .Values.autoscaling.cooldownPeriod }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: {{ .Values.autoscaling.cooldownPeriod }}
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 600
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: {{ .Values.autoscaling.prometheusAddress }}
+        # Only this release's pods, so a canary never makes the stable release grow.
+        query: sum(vllm:num_requests_waiting{namespace="{{ .Release.Namespace }}", service="{{ include "vllm.fullname" . }}"})
+        threshold: {{ .Values.autoscaling.waitingPerReplica | quote }}
+        ignoreNullValues: "true"
+{{- end }}

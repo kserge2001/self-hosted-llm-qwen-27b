@@ -1,0 +1,28 @@
+# Argo CD UI at https://argocd.<domain> on the shared internal ALB. Terraform runs the server
+# with server.insecure=true, so TLS ends at the ALB and the backend is plain HTTP (port 80).
+# The argocd CLI needs --grpc-web through an ALB.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd
+  namespace: argocd
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/group.name: astra-internal
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.certificateArn | quote }}
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+spec:
+  ingressClassName: alb
+  rules:
+    - host: argocd.{{ .Values.domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argo-cd-argocd-server   # Terraform's Helm release "argo-cd"
+                port:
+                  number: 80

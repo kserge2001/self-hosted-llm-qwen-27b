@@ -1,0 +1,14 @@
+# The version of Qwen3.8-27B that serves. Merging a change to this file is the deployment.
+# model.uri and model.revision are written by the model pipeline's pull request
+# (.github/workflows/model-promote.yml) after the human approval. Do not edit them by hand.
+
+image:
+  # Latest stable vLLM, checked 2026-10-28. The first build was proven on v0.31.0:
+  # if v0.32.0 misbehaves, set v0.31.0 here and merge.
+  tag: v0.32.0
+
+model:
+  # Placeholder until the pipeline's first pull request: __ACCOUNT_ID__ and the revision get replaced.
+  uri: s3://astra-models-__ACCOUNT_ID__/qwen3.8-27b/017b9c7af6b5689d5dd426a76e0bc077eb5ca20a/
+  revision: 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a
+  servedName: astra

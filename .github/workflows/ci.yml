@@ -1,0 +1,75 @@
+# Checks on every pull request. GitHub-hosted runners: nothing here needs the cloud or the cluster.
+name: ci
+
+on:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true   # a new push makes the old check useless
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [1-foundations/bootstrap, 1-foundations/terraform]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, checked 2026-10-28
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1, checked 2026-10-28
+        with:
+          terraform_version: 1.17.1   # latest stable, checked 2026-10-28
+      # Each check is skipped until the stage exists, so early stages of the build still pass.
+      - run: terraform fmt -check -recursive
+        if: hashFiles(format('{0}/*.tf', matrix.dir)) != ''
+        working-directory: ${{ matrix.dir }}
+      # -backend=false: validate the code without touching the state bucket.
+      - run: terraform init -backend=false -input=false && terraform validate
+        if: hashFiles(format('{0}/*.tf', matrix.dir)) != ''
+        working-directory: ${{ matrix.dir }}
+
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1, checked 2026-10-28
+        with:
+          version: v4.3.1   # latest stable, checked 2026-10-28
+      - run: helm lint 4-serving/charts/vllm -f 4-serving/values/qwen3.8-27b.yaml
+        if: hashFiles('4-serving/charts/vllm/Chart.yaml') != ''   # skipped until stage 4 exists
+      # Render with the real values, so a broken template fails here and not in Argo CD.
+      - run: helm template vllm 4-serving/charts/vllm -f 4-serving/values/qwen3.8-27b.yaml > /dev/null
+        if: hashFiles('4-serving/charts/vllm/Chart.yaml') != ''
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0, checked 2026-10-28
+        with:
+          python-version: "3.12"
+      - run: pip install ruff==0.17.3   # latest, checked 2026-10-28
+      # Run inside the folder, so ruff sees spec.py as our own module when it sorts imports.
+      - run: ruff check --line-length 120 .
+        working-directory: 3-model-pipeline/scripts
+      - run: python -m compileall -q 3-model-pipeline/scripts
+
+  yaml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install yamllint==1.38.0 actionlint-py==1.7.12.25   # latest, checked 2026-10-28
+      # Helm templates (4-serving and the 2-platform local charts) are not plain YAML until rendered,
+      # so they are skipped here. .terraform/ holds downloaded modules when run locally.
+      - name: yamllint
+        run: >-
+          yamllint -d "{extends: relaxed, rules: {line-length: disable},
+          ignore: ['4-serving/charts/*/templates/', '2-platform/*/templates/', '**/.terraform/']}" .
+      - name: actionlint
+        run: actionlint

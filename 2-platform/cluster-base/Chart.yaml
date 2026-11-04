@@ -1,0 +1,5 @@
+apiVersion: v2
+name: cluster-base
+description: Default StorageClass, shared namespaces and the Argo CD Ingress
+type: application
+version: 0.1.0

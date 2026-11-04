@@ -1,0 +1,248 @@
+# Model promotion: Hugging Face -> scan -> S3 -> MLflow -> GPU eval -> gate -> human approval -> champion.
+# It never deploys. The last job opens a pull request on 4-serving; merging that pull request is the deployment.
+# rollout "canary" stops at alias "approved" and a canary values file; 7-operate/scripts/canary.sh does the rest.
+name: model-promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: Model spec file
+        required: true
+        default: 3-model-pipeline/models/qwen3.8-27b.yaml
+      rollout:
+        description: "direct: serve it on merge (alias champion). canary: 10% first with canary.sh (alias approved)"
+        type: choice
+        options: [direct, canary]
+        default: direct
+  push:
+    branches: [main]
+    paths:
+      - 3-model-pipeline/models/**
+
+# One promotion at a time. Never cancel a running one: it may be half-way through an upload.
+concurrency:
+  group: model-promote
+  cancel-in-progress: false
+
+# Read-only for every job. The promote job opens its pull request with a GitHub App token, not with GITHUB_TOKEN.
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  # No MLFLOW_TRACKING_URI here: the scripts find the SageMaker MLflow App "astra" by name and use its ARN
+  # (3-model-pipeline/scripts/spec.py). The runner's Pod Identity role may list and call it.
+  PYTHON_VERSION: "3.12"   # modelscan does not support 3.13 yet
+
+jobs:
+  intake:
+    # Self-hosted ARC runner pod in the cluster. Pod Identity (service account arc-runner) gives AWS access.
+    runs-on: arc-runner
+    timeout-minutes: 120
+    outputs:
+      spec: ${{ steps.pick.outputs.spec }}
+      name: ${{ steps.names.outputs.name }}
+      revision: ${{ steps.names.outputs.revision }}
+      model_uri: ${{ steps.names.outputs.model_uri }}
+      results_uri: ${{ steps.names.outputs.results_uri }}
+      eval_tasks: ${{ steps.names.outputs.eval_tasks }}
+      eval_limit: ${{ steps.names.outputs.eval_limit }}
+      eval_num_fewshot: ${{ steps.names.outputs.eval_num_fewshot }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, checked 2026-10-28
+        with:
+          fetch-depth: 0   # the push trigger needs history to see which spec changed
+
+      - name: Pick the spec file
+        id: pick
+        env:
+          INPUT_SPEC: ${{ inputs.spec }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$INPUT_SPEC" ]; then
+            spec="$INPUT_SPEC"
+          else
+            # One model per run: stop if a push changed several specs (or none, e.g. a deleted file).
+            spec=$(git diff --name-only --diff-filter=AM "$BEFORE" "$GITHUB_SHA" -- '3-model-pipeline/models/*.yaml')
+            [ "$(echo "$spec" | grep -c .)" = "1" ] || { echo "need exactly one changed spec, got: $spec"; exit 1; }
+          fi
+          case "$spec" in 3-model-pipeline/models/*.yaml) ;; *) echo "not a model spec: $spec"; exit 1 ;; esac
+          [ -f "$spec" ] || { echo "missing: $spec"; exit 1; }
+          echo "spec=$spec" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0, checked 2026-10-28
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r 3-model-pipeline/scripts/requirements.txt
+
+      - name: Contract names
+        id: names
+        run: python 3-model-pipeline/scripts/spec.py "${{ steps.pick.outputs.spec }}"
+
+      - name: Download
+        run: python 3-model-pipeline/scripts/download.py --spec "${{ steps.pick.outputs.spec }}" --out "$RUNNER_TEMP/model"
+      - name: Scan
+        run: python 3-model-pipeline/scripts/scan.py --spec "${{ steps.pick.outputs.spec }}" --dir "$RUNNER_TEMP/model"
+      - name: Upload to S3
+        run: python 3-model-pipeline/scripts/upload.py --spec "${{ steps.pick.outputs.spec }}" --dir "$RUNNER_TEMP/model"
+
+  register:
+    needs: intake
+    runs-on: arc-runner
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.register.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r 3-model-pipeline/scripts/requirements.txt
+      - name: Register in MLflow
+        id: register
+        run: python 3-model-pipeline/scripts/register.py --spec "${{ needs.intake.outputs.spec }}"
+
+  evaluate:
+    needs: [intake, register]
+    runs-on: arc-runner
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-kubectl@bda439f5f36b99b262ebdcd3613869bddb064c8e # v5.2.0, checked 2026-10-28
+        with:
+          version: v1.37.2   # latest stable, checked 2026-10-28; keep within one minor version of the cluster
+
+      - name: Start the eval Job
+        env:
+          MODEL_NAME: ${{ needs.intake.outputs.name }}
+          MODEL_URI: ${{ needs.intake.outputs.model_uri }}
+          RESULTS_URI: ${{ needs.intake.outputs.results_uri }}
+          EVAL_TASKS: ${{ needs.intake.outputs.eval_tasks }}
+          EVAL_LIMIT: ${{ needs.intake.outputs.eval_limit }}
+          EVAL_NUM_FEWSHOT: ${{ needs.intake.outputs.eval_num_fewshot }}
+          REVISION: ${{ needs.intake.outputs.revision }}
+        run: |
+          # The ARC runner image has no envsubst; it has sudo and apt.
+          command -v envsubst >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q gettext-base; }
+          # A new name per run, so a rerun never collides with the last Job.
+          export JOB_NAME="eval-${REVISION:0:8}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "JOB_NAME=$JOB_NAME" >> "$GITHUB_ENV"
+          # Only these variables are replaced; any other $ in the file is left as it is.
+          envsubst '${JOB_NAME} ${MODEL_NAME} ${MODEL_URI} ${RESULTS_URI} ${EVAL_TASKS} ${EVAL_LIMIT} ${EVAL_NUM_FEWSHOT} ${AWS_REGION}' \
+            < 3-model-pipeline/k8s/eval-job.yaml > eval-job.yaml
+          kubectl apply -f eval-job.yaml
+
+      - name: Wait for the eval Job
+        run: |
+          # kubectl wait watches one condition, so check both Complete and Failed ourselves.
+          while true; do
+            state=$(kubectl -n model-pipeline get job "$JOB_NAME" \
+              -o jsonpath='{range .status.conditions[?(@.status=="True")]}{.type} {end}')
+            case "$state" in
+              *Complete*) echo "eval finished"; break ;;
+              *Failed*) echo "eval failed"; break ;;
+            esac
+            sleep 30
+          done
+          kubectl -n model-pipeline logs "job/$JOB_NAME" -c lm-eval --tail=60 || true
+          case "$state" in *Complete*) ;; *) kubectl -n model-pipeline logs "job/$JOB_NAME" -c vllm --tail=60 || true; exit 1 ;; esac
+
+  gate:
+    needs: [intake, register, evaluate]
+    runs-on: arc-runner
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r 3-model-pipeline/scripts/requirements.txt
+      - name: Compare scores with thresholds
+        run: >-
+          python 3-model-pipeline/scripts/gate.py
+          --spec "${{ needs.intake.outputs.spec }}"
+          --version "${{ needs.register.outputs.version }}"
+          --results "${{ needs.intake.outputs.results_uri }}"
+
+  approve:
+    needs: [intake, register, gate]
+    runs-on: arc-runner
+    # The environment has required reviewers, so this job waits until a person approves it in GitHub.
+    environment: model-approval
+    timeout-minutes: 5
+    steps:
+      - run: >-
+          echo "approved: ${{ needs.intake.outputs.name }} version ${{ needs.register.outputs.version }}
+          (revision ${{ needs.intake.outputs.revision }})"
+
+  promote:
+    needs: [intake, register, approve]
+    runs-on: arc-runner
+    timeout-minutes: 10
+    env:
+      # A push has no inputs: it always rolls out directly.
+      ROLLOUT: ${{ inputs.rollout || 'direct' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r 3-model-pipeline/scripts/requirements.txt
+      - name: Set the alias and update the serving values
+        id: promote
+        run: >-
+          python 3-model-pipeline/scripts/promote.py
+          --spec "${{ needs.intake.outputs.spec }}"
+          --version "${{ needs.register.outputs.version }}"
+          --values "4-serving/values/${{ needs.intake.outputs.name }}.yaml"
+          --rollout "$ROLLOUT"
+
+      # A pull request opened with GITHUB_TOKEN starts no workflows, so ci.yml would never check it.
+      # A GitHub App token does. It is the ARC GitHub App: the runner's Pod Identity role may read its secret.
+      - name: Read the GitHub App key
+        id: app
+        run: |
+          python - <<'PY'
+          import json, os, boto3
+          s = json.loads(boto3.client("secretsmanager", region_name=os.environ["AWS_REGION"])
+                         .get_secret_value(SecretId="astra/arc/github-app")["SecretString"])
+          key = s["github_app_private_key"].strip()
+          # add-mask works line by line, so mask every line of the PEM key.
+          for line in key.splitlines():
+              if line.strip():
+                  print(f"::add-mask::{line.strip()}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"app_id={s['github_app_id']}\n")
+              f.write(f"private_key<<PEM_EOF\n{key}\nPEM_EOF\n")
+          PY
+      - name: Get a GitHub App token
+        id: token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0, checked 2026-10-28
+        with:
+          # The secret stores the App ID (ARC needs it). The action prefers client-id now; app-id still works.
+          app-id: ${{ steps.app.outputs.app_id }}
+          private-key: ${{ steps.app.outputs.private_key }}
+          # Only what the pull request needs. The app must have these repository permissions (3-model-pipeline/README.md).
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open the deployment pull request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1, checked 2026-10-28
+        with:
+          token: ${{ steps.token.outputs.token }}   # pushes the branch and opens the pull request as the app
+          branch: promote/${{ needs.intake.outputs.name }}-${{ env.ROLLOUT }}
+          add-paths: ${{ steps.promote.outputs.values_file }}
+          commit-message: "${{ env.ROLLOUT == 'canary' && 'canary' || 'serve' }} ${{ needs.intake.outputs.name }} ${{ steps.promote.outputs.revision }}"
+          title: "${{ env.ROLLOUT == 'canary' && 'Canary' || 'Deploy' }} ${{ needs.intake.outputs.name }} version ${{ steps.promote.outputs.version }}"
+          body: |
+            The model pipeline set the alias `${{ steps.promote.outputs.alias }}` on this version in MLflow.
+            This pull request changes `${{ steps.promote.outputs.values_file }}`.
+
+            - MLflow: `${{ needs.intake.outputs.name }}` version ${{ steps.promote.outputs.version }}
+            - Weights: `${{ steps.promote.outputs.uri }}`
+            - Revision: `${{ steps.promote.outputs.revision }}`
+            - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            ${{ env.ROLLOUT == 'canary' && 'Merging this pull request serves nothing yet. Next: `bash 7-operate/scripts/canary.sh start` (see 7-operate/runbooks/model-upgrade.md).' || 'Merging this pull request is the deployment: Argo CD rolls out the new weights.' }}
+          delete-branch: true

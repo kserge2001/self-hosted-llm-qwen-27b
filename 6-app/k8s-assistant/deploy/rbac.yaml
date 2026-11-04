@@ -1,0 +1,32 @@
+# What the assistant may see: read-only, and only the objects its tools use.
+# No secrets, no configmaps (they often hold passwords), no pods/log, no pods/exec, no write verbs.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-assistant
+  namespace: k8s-assistant
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-assistant-read
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "events", "namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-assistant-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8s-assistant-read
+subjects:
+  - kind: ServiceAccount
+    name: k8s-assistant
+    namespace: k8s-assistant

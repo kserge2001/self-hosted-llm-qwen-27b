@@ -1,7 +1,11 @@
-terraform/.terraform/
-terraform/*.tfstate*
-terraform/terraform.tfvars
-terraform/tfplan
 build/
 *.bak
-examples/.env
+1-foundations/**/.terraform/
+1-foundations/**/*.tfstate*
+1-foundations/**/terraform.tfvars
+1-foundations/**/tfplan
+1-foundations/terraform/backend.hcl
+# Python
+__pycache__/
+.ruff_cache/
+.venv/

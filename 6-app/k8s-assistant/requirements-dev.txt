@@ -1,0 +1,5 @@
+# Test and lint tools, not in the image. Latest stable on PyPI, checked 2026-10-28.
+-r requirements.txt
+pytest==9.2.0
+ruff==0.17.3
+httpx==0.28.1  # needed by FastAPI's TestClient

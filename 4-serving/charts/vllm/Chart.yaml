@@ -1,0 +1,7 @@
+apiVersion: v2
+name: vllm
+description: vLLM OpenAI-compatible server for Astra. Streams weights from S3, scales with KEDA.
+type: application
+version: 0.1.0
+# The vLLM image this chart was written against (checked 2026-10-28). The image tag itself is set in values.
+appVersion: "v0.32.0"

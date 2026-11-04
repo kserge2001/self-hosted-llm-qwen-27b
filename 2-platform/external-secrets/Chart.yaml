@@ -1,0 +1,5 @@
+apiVersion: v2
+name: external-secrets-config
+description: ClusterSecretStore for AWS Secrets Manager
+type: application
+version: 0.1.0

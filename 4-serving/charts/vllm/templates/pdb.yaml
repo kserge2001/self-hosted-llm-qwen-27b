@@ -1,0 +1,14 @@
+{{- if and .Values.pdb.enabled (not .Values.canary) }}
+# Node expiry, upgrades and drains take at most one replica away at a time.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "vllm.fullname" . }}
+  labels:
+    {{- include "vllm.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "vllm.selectorLabels" . | nindent 6 }}
+{{- end }}

@@ -1,0 +1,2 @@
+# Set by the ApplicationSet from the cluster Secret annotation aws_region.
+region: us-east-1

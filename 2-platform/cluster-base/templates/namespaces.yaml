@@ -1,0 +1,24 @@
+# Namespaces made here (not by their own stage) because the CI runner's RBAC
+# (2-platform/arc) points at them before stages 3 and 5 exist.
+# Delete=false: removing this app never deletes a namespace full of other stages' work.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: model-pipeline              # eval Jobs started by the model pipeline (stage 3)
+  annotations:
+    argocd.argoproj.io/sync-options: Delete=false
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway                     # LiteLLM (stage 5); the runner only reads here
+  annotations:
+    argocd.argoproj.io/sync-options: Delete=false
+---
+# The eval Job's identity. Terraform links it (EKS Pod Identity) to: read the models bucket,
+# write the MLflow bucket (results.json under eval/).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-eval
+  namespace: model-pipeline

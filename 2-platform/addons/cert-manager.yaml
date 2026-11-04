@@ -1,0 +1,67 @@
+# cert-manager: makes TLS certificates inside the cluster. Here it only serves the ClickHouse
+# operator (webhook and metrics certificates); the Langfuse chart needs that operator.
+# Public HTTPS still uses the one ACM certificate on the ALB, not cert-manager.
+# Wave 2: before the ClickHouse operator (wave 3), which needs its Issuer and Certificate CRDs.
+# Sync waves order only what the root app "platform" applies (these ApplicationSets). The Applications
+# they generate converge on their own: retry with backoff, plus SkipDryRunOnMissingResource where a CRD
+# comes from another app.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: enable_cert_manager
+              operator: In
+              values: ["true"]
+  template:
+    metadata:
+      name: cert-manager
+      annotations:
+        argocd.argoproj.io/sync-wave: "2"
+    spec:
+      project: default
+      source:
+        repoURL: quay.io/jetstack/charts   # OCI registry
+        chart: cert-manager
+        # Latest stable, checked 2026-10-28. The Langfuse chart README tests v1.20.2;
+        # any supported cert-manager works for the operator's self-signed certificates.
+        targetRevision: v1.21.3
+        helm:
+          releaseName: cert-manager
+          valuesObject:
+            crds:
+              enabled: true               # the chart default installs no CRDs
+              keep: true                  # deleting the app never deletes every Certificate
+            resources:
+              requests: {cpu: 20m, memory: 64Mi}
+              limits: {memory: 256Mi}
+            webhook:
+              resources:
+                requests: {cpu: 10m, memory: 32Mi}
+                limits: {memory: 128Mi}
+            cainjector:
+              resources:
+                requests: {cpu: 20m, memory: 64Mi}
+                limits: {memory: 256Mi}
+            startupapicheck:
+              resources:
+                requests: {cpu: 10m, memory: 32Mi}
+                limits: {memory: 64Mi}
+      destination:
+        server: '{{server}}'
+        namespace: cert-manager
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        retry:
+          limit: 10
+          backoff: {duration: 30s, factor: 2, maxDuration: 5m}

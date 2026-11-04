@@ -1,0 +1,139 @@
+# GitHub Actions Runner Controller (ARC): CI jobs run on pods inside the cluster, so the
+# model pipeline can reach S3, the SageMaker MLflow App and the Kubernetes API without long-lived AWS keys.
+#   wave 5  arc-controller  the controller and its CRDs, namespace arc-systems
+#   wave 6  arc-runner      the runner scale set (workflows use "runs-on: arc-runner"),
+#                           plus 2-platform/arc: GitHub App Secret, service account, RBAC
+# Sync waves order only what the root app "platform" applies (these ApplicationSets). The Applications
+# they generate converge on their own: retry with backoff, plus SkipDryRunOnMissingResource where a CRD
+# comes from another app.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: arc-controller
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: enable_arc
+              operator: In
+              values: ["true"]
+  template:
+    metadata:
+      name: arc-controller
+      annotations:
+        argocd.argoproj.io/sync-wave: "5"
+    spec:
+      project: default
+      source:
+        repoURL: ghcr.io/actions/actions-runner-controller-charts   # OCI registry
+        chart: gha-runner-scale-set-controller
+        targetRevision: 0.15.1            # latest stable, checked 2026-10-28
+        helm:
+          releaseName: arc-controller
+          valuesObject:
+            serviceAccount:
+              name: arc-controller        # fixed name: the runner set below points at it
+            flags:
+              logLevel: info              # chart default "debug" is very noisy
+            resources:
+              requests: {cpu: 50m, memory: 128Mi}
+              limits: {memory: 512Mi}
+      destination:
+        server: '{{server}}'
+        namespace: arc-systems
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        retry:
+          limit: 10
+          backoff: {duration: 30s, factor: 2, maxDuration: 5m}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: arc-runner
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  # Go templates here (not the {{key}} style): repo_url may end in .git, which ARC rejects,
+  # and only Go templates can trim it.
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: enable_arc
+              operator: In
+              values: ["true"]
+  template:
+    metadata:
+      name: arc-runner
+      annotations:
+        argocd.argoproj.io/sync-wave: "6"
+    spec:
+      project: default
+      sources:
+        - repoURL: '{{.metadata.annotations.repo_url}}'
+          targetRevision: '{{.metadata.annotations.repo_revision}}'
+          path: 2-platform/arc
+        - repoURL: ghcr.io/actions/actions-runner-controller-charts
+          chart: gha-runner-scale-set
+          targetRevision: 0.15.1          # latest stable, checked 2026-10-28
+          helm:
+            releaseName: arc-runner       # also the scale set name: runs-on: arc-runner
+            valuesObject:
+              githubConfigUrl: '{{trimSuffix ".git" .metadata.annotations.repo_url}}'   # runners serve this one repo
+              githubConfigSecret: arc-github-app   # from 2-platform/arc (astra/arc/github-app)
+              minRunners: 0               # no idle runner pods
+              maxRunners: 3
+              # Argo CD renders charts without cluster access, so the chart cannot look the
+              # controller up by itself: name it.
+              controllerServiceAccount:
+                namespace: arc-systems
+                name: arc-controller
+              template:
+                spec:
+                  serviceAccountName: arc-runner   # Pod Identity + RBAC from 2-platform/arc
+                  securityContext:
+                    fsGroup: 1001                  # the "runner" user's group: lets it write to the new disk
+                  containers:
+                    - name: runner
+                      image: ghcr.io/actions/actions-runner:2.338.2   # latest runner, checked 2026-10-28
+                      command: ["/home/runner/run.sh"]
+                      resources:
+                        requests: {cpu: 500m, memory: 1Gi}
+                        limits: {memory: 4Gi}
+                      volumeMounts:
+                        - name: work
+                          mountPath: /home/runner/_work   # the runner's work dir ($RUNNER_TEMP is inside it)
+                  # The model intake job downloads ~31 GB. Each runner pod gets its own 100Gi EBS disk,
+                  # made with the pod and deleted with it, so the job never fills the node's disk.
+                  volumes:
+                    - name: work
+                      ephemeral:
+                        volumeClaimTemplate:
+                          spec:
+                            accessModes: ["ReadWriteOnce"]
+                            storageClassName: gp3         # made by cluster-base (2-platform/cluster-base)
+                            resources:
+                              requests:
+                                storage: 100Gi
+      destination:
+        server: '{{.server}}'
+        namespace: arc-runners
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=true, SkipDryRunOnMissingResource=true]
+        retry:
+          limit: 10
+          backoff: {duration: 30s, factor: 2, maxDuration: 5m}

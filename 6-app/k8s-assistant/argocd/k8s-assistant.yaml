@@ -1,0 +1,46 @@
+# Stage 6: the k8s-assistant app in namespace "k8s-assistant".
+# Apply once:  kubectl apply -f 6-app/k8s-assistant/argocd/k8s-assistant.yaml
+# In a company the app team opens a pull request to the GitOps repository instead.
+# Like stages 4 and 5: an ApplicationSet with the cluster generator makes one Application "k8s-assistant",
+# and fills the repository and the gateway's domain from the cluster Secret Terraform made (GitOps Bridge).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: k8s-assistant
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+  template:
+    metadata:
+      name: k8s-assistant
+    spec:
+      project: default
+      source:
+        repoURL: '{{ .metadata.annotations.repo_url }}'
+        targetRevision: '{{ .metadata.annotations.repo_revision }}'
+        path: 6-app/k8s-assistant/deploy
+        kustomize:
+          patches:
+            # The gateway URL depends on the domain, so it is set here and not in Git.
+            - target:
+                kind: ConfigMap
+                name: k8s-assistant
+              patch: |-
+                - op: replace
+                  path: /data/OPENAI_BASE_URL
+                  value: https://astra.{{ .metadata.annotations.domain }}/v1
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: k8s-assistant
+      syncPolicy:
+        automated:
+          prune: true     # a manifest removed from Git is removed from the cluster
+          selfHeal: true  # a manual change in the cluster is put back to what Git says
+        syncOptions:
+          - CreateNamespace=true

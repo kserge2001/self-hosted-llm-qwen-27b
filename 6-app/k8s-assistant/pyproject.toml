@@ -1,0 +1,13 @@
+[tool.ruff]
+line-length = 120
+target-version = "py315"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/prompt.py" = ["E501"]  # prompt text reads better as whole lines
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

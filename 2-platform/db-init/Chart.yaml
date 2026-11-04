@@ -1,0 +1,5 @@
+apiVersion: v2
+name: db-init
+description: Creates the litellm database and user on RDS (idempotent)
+type: application
+version: 0.1.0

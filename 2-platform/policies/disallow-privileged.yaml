@@ -1,0 +1,36 @@
+# A privileged container is root on the node: it can read every other pod's secrets.
+# Enforce (Deny): no workload in this course needs it.
+# ValidatingPolicy (CEL) replaces the deprecated kyverno.io/v1 ClusterPolicy.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: disallow-privileged
+  annotations:
+    policies.kyverno.io/title: Disallow privileged containers
+spec:
+  validationActions: [Deny]
+  failurePolicy: Ignore           # if Kyverno itself is down, pods still start
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, kyverno]   # AWS node agents (CNI, kube-proxy) run privileged
+  variables:
+    - name: allContainers
+      expression: >-
+        object.spec.containers +
+        (has(object.spec.initContainers) ? object.spec.initContainers : []) +
+        (has(object.spec.ephemeralContainers) ? object.spec.ephemeralContainers : [])
+  validations:
+    - expression: >-
+        variables.allContainers.all(c,
+          !has(c.securityContext) ||
+          !has(c.securityContext.privileged) ||
+          c.securityContext.privileged == false)
+      message: "Privileged containers are not allowed. Remove securityContext.privileged."

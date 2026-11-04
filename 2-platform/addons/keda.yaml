@@ -1,0 +1,52 @@
+# KEDA: scales workloads on any metric (used later to scale vLLM on queue length).
+# Wave 2: no dependencies beyond the base cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: keda
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - clusters:
+        selector:
+          matchExpressions:
+            - key: enable_keda
+              operator: In
+              values: ["true"]
+  template:
+    metadata:
+      name: keda
+      annotations:
+        argocd.argoproj.io/sync-wave: "2"
+    spec:
+      project: default
+      source:
+        repoURL: https://kedacore.github.io/charts
+        chart: keda
+        targetRevision: 2.21.0            # latest stable, checked 2026-10-28
+        helm:
+          releaseName: keda
+          valuesObject:
+            resources:
+              operator:
+                requests: {cpu: 100m, memory: 128Mi}
+                limits: {memory: 512Mi}
+              metricServer:
+                requests: {cpu: 100m, memory: 128Mi}
+                limits: {memory: 512Mi}
+              webhooks:
+                requests: {cpu: 20m, memory: 64Mi}
+                limits: {memory: 256Mi}
+      destination:
+        server: '{{server}}'
+        namespace: keda
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        retry:
+          limit: 10
+          backoff: {duration: 30s, factor: 2, maxDuration: 5m}

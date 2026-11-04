@@ -1,61 +1,28 @@
 # Astra: an internal inference API on Amazon EKS
 
-Astra is the company's internal inference API. The company's AI engineers call it from their applications exactly as they would call OpenAI: a base URL, a team key and the model name `astra`.
+Astra is the company's own AI model API. Apps call it like OpenAI, with a base URL, a team key and the model name `astra`, but the model (Qwen3.8-27B) runs on the company's own GPUs in its own AWS account.
 
-Behind the name runs **Qwen3.8-27B**, a model anyone can download and run (an open-weight model). The company downloaded it once and runs it on its own GPUs, the chips that do the model's arithmetic. No request leaves the company's AWS account, and no provider bills per token (a token is a piece of a word).
+## The stages
 
-The GPUs still cost money every hour, so every team pays its share. Each team gets a key, a monthly budget and limits on requests and tokens per minute. The gateway, the front door every request goes through, prices every token at an internal rate and charges it to the team's budget. A dashboard shows what each team used.
+You build Astra in eight stages, one folder each. Each stage ends with a check. Do not start the next stage before the check passes.
 
-Start with [docs/deployment-guide.md](docs/deployment-guide.md). It explains every idea in plain words, every decision and its options, and every build step. Step 9 is the API as an AI engineer uses it. The glossary defines every term used here.
+| Folder | What it builds | Who owns it in a company | The check that ends it |
+|---|---|---|---|
+| `1-foundations/` | the Terraform state bucket, then the network, EKS, Karpenter, IAM, S3, RDS, secrets, the certificate, the Bedrock guardrail, the MLflow registry (SageMaker MLflow App) and Argo CD | cloud platform team | `kubectl get nodes` works and Argo CD shows the `platform` app |
+| `2-platform/` | the add-ons through Argo CD: Karpenter NodePools, Kyverno, External Secrets, monitoring, GitHub runners, the database setup Job | platform team | every add-on app in Argo CD is Synced and Healthy |
+| `3-model-pipeline/` | download, scan, upload to S3, register in MLflow, eval gate, promotion pull request | ML engineers (MLOps) | the model version in MLflow has the alias `champion` |
+| `4-serving/` | vLLM from our own Helm chart, serving the model as `astra` | ML platform team | `/v1/models` on `vllm.serving.svc:8000` lists `astra` |
+| `5-gateway/` | the LiteLLM gateway with team keys, budgets, guardrails, and Langfuse traces | AI platform team | a call to `https://astra.<domain>/v1` with a team key answers, and the trace shows in Langfuse |
+| `6-app/k8s-assistant/` | an app that answers questions about the cluster, with its own CI and promptfoo tests | an app team | `/ask` names the right pods, and the promptfoo job is green |
+| `7-operate/` | spend report, canary release, teardown, runbooks | platform team and on-call | a canary was promoted or rolled back, and teardown left nothing behind |
+| `8-production/` | nothing to build: what a company changes before go-live | architects and security | you can say why each change is needed |
 
-## Calling Astra
-
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="http://localhost:4000/v1", api_key="<your team key>")
-response = client.chat.completions.create(model="astra", messages=[{"role": "user", "content": "Hello"}])
-print(response.choices[0].message.content)
-```
-
-Streaming, tool calling, structured JSON output and per-user spend tracking all work through the same API (guide, step 9).
-
-## What runs where
-
-```
- applications built by AI engineers         EKS cluster (Auto Mode, private subnets, up to 4 Availability Zones)
- ──────────────────────────────────         ──────────────────────────────────────────────────────────────────
- HR assistant      ─┐
- Support bot       ─┤  team key   ┌──────────────┐  vLLM key  ┌──────────────────────────┐
- Data notebooks    ─┼───────────▶ │ LiteLLM x2   │──────────▶ │ vLLM replica 1  (zone A) │  1 x L40S GPU
- Any team's code   ─┘             │ gateway:     │            │ vLLM replica 2  (zone B) │  1 x L40S GPU
-                                  │ keys,        │            └──────────────────────────┘
-                                  │ budgets,     │                        ▲ weights copied at start
-                                  │ rate limits, │                 S3 model bucket
-                                  │ spend log    │
-                                  └──────┬───────┘
-                                         ▼
-                               RDS PostgreSQL (teams, keys, spend)       Prometheus + Grafana
-```
-
-## Layout
-
-| Path | What it holds | Applied with |
-|---|---|---|
-| `terraform/` | VPC, EKS Auto Mode cluster, S3 model bucket, RDS PostgreSQL, Secrets Manager, Pod Identity roles | `terraform apply` |
-| `k8s/00-platform.yaml` | namespaces, default StorageClass, network policy switch | `kubectl apply` |
-| `k8s/10-gpu-nodepool.yaml` | which GPU machines the cluster may start, and the GPU limit | `kubectl apply` |
-| `k8s/20-model-loader.yaml` | one-off Job: Hugging Face to the S3 model bucket | `kubectl create` |
-| `k8s/30-vllm.yaml` | the model servers, network lock, metrics, alerts | `kubectl apply` |
-| `k8s/40-gateway.yaml` | LiteLLM gateway and Redis | `kubectl apply` |
-| `k8s/60-monitoring-values.yaml` | Prometheus and Grafana | `helm install` |
-| `k8s/70-dashboard.yaml` | the Grafana dashboard: GPU serving and spend by team | `kubectl apply` |
-| `scripts/render.sh` | writes Terraform outputs into the manifests (output in `build/`) | `bash` |
-| `scripts/create-secrets.sh` | copies secrets from Secrets Manager into the cluster | `bash` |
-| `scripts/create-teams.sh` | creates teams, budgets, rate limits and keys | `bash` |
-| `scripts/spend-report.sh` | what each team spent against its budget | `bash` |
-| `examples/ask_astra.py` | how an AI engineer's app calls Astra | `python` |
+`.github/workflows/` holds the CI of the stages: `ci.yml`, `model-promote.yml`, `gateway-teams.yml` and `app-ci.yml`.
 
 ## Cost
 
-This runs two GPU machines. It costs about **$4.45 an hour** while it is up (see the Cost section of the guide). Tear it down when you finish (step 14 of the guide).
+The GPU machines cost the most: a g6e.xlarge costs about $1.86 an hour (us-east-1, on-demand, October 2026). With the cluster, the NAT gateway, the database and the small machines, the lab costs a few dollars an hour while it runs. MLflow is the serverless SageMaker MLflow App: it has no extra charge, you pay only for its S3 bucket (checked 2026-10-28). Run `7-operate/scripts/teardown.sh` when you stop.
+
+## The guide
+
+The step-by-step guide is on kodelumi. It explains each stage, each decision and each command. This repository holds the code the guide builds.

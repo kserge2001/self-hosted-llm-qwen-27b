@@ -1,0 +1,25 @@
+# One model version to promote. A change to this file starts .github/workflows/model-promote.yml.
+# To promote a new version: change `revision`, open a pull request, merge it.
+name: qwen3.8-27b                     # S3 folder and MLflow registered model name
+hf_repo: Qwen/Qwen3.8-27B-FP8
+# One exact Hugging Face commit, so the weights we test are the weights we serve.
+revision: 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a   # checked 2026-10-28
+license: apache-2.0                   # scan.py stops if Hugging Face reports a different license
+
+# Only what vLLM needs. Weights must be .safetensors: download.py refuses any other weight file.
+allow_patterns:
+  - "*.safetensors"
+  - "*.json"
+  - "*.txt"
+  - "*.jinja"
+  - "LICENSE"
+
+# The gate: lm-evaluation-harness runs these tasks against the candidate on a GPU node.
+eval:
+  limit: 250            # questions per task; 250 keeps the whole job near 15 minutes on one g6e GPU
+  num_fewshot: 5
+  tasks:
+    - name: gsm8k
+      metric: exact_match,flexible-extract   # flexible-extract finds the number in a chat answer
+      # STARTING VALUE, tune it: set it a few points under the score of the version that serves today.
+      min: 0.80
