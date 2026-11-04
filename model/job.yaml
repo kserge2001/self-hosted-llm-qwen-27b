@@ -1,7 +1,9 @@
 # The model loader: one Kubernetes Job that copies one model version from Hugging Face to S3.
 #   1. download.py  the exact revision in qwen3.8-27b.yaml, only the file types it allows
 #   2. scan.py      safetensors only, valid safetensors headers, modelscan, the license matches
-#   3. upload.py    every file to s3://astra-models-<account>/<name>/<revision>/, then SHA256SUMS last
+#   3. upload.py    every file to s3://astra-models-<account>/<name>/<revision>/, the scan report,
+#                   then SHA256SUMS last
+# If that revision is already complete in S3 (SHA256SUMS is there), the Job stops at once.
 # It runs inside the cluster, so the 31 GB never pass through your laptop, and it uses the
 # model-loader role (EKS Pod Identity): write the models bucket, read astra/hf-token. No keys.
 #
@@ -25,10 +27,13 @@ metadata:
   name: model-loader
   namespace: models
 spec:
-  backoffLimit: 1                  # one retry, for a network error
+  backoffLimit: 0                  # no automatic retry: a failed check would fail again. Read the log, fix, run again.
   activeDeadlineSeconds: 10800     # stop after 3 hours, whatever happens
   ttlSecondsAfterFinished: 86400   # the finished Job and its logs stay for one day
   template:
+    metadata:
+      annotations:
+        karpenter.sh/do-not-disrupt: "true"   # Karpenter must not move this pod to save money mid-download
     spec:
       serviceAccountName: model-loader
       restartPolicy: Never
@@ -46,13 +51,18 @@ spec:
               set -e
               export HOME=/work PATH="/work/.local/bin:$PATH"
               pip install --quiet --user --no-warn-script-location -r /loader/requirements.txt
+              if python /loader/upload.py --spec /loader/model.yaml --check; then exit 0; fi
               python /loader/download.py --spec /loader/model.yaml --out /work/model
               python /loader/scan.py     --spec /loader/model.yaml --dir /work/model
-              python /loader/upload.py   --spec /loader/model.yaml --dir /work/model
+              python /loader/upload.py   --spec /loader/model.yaml --dir /work/model --report /work/modelscan-report.json
           env:
-            # Change this if you built in another region. boto3 needs it to find Secrets Manager.
+            # Same as region in terraform.tfvars. boto3 needs it to find Secrets Manager and S3.
             - name: AWS_DEFAULT_REGION
               value: us-east-1
+            # Empty: use astra-models-<account> (Terraform's default name "astra").
+            # If you changed name in terraform.tfvars, put the bucket name from `terraform output buckets` here.
+            - name: MODELS_BUCKET
+              value: ""
             - name: HF_HUB_DISABLE_PROGRESS_BARS
               value: "1"               # plain log lines instead of progress bars
           resources:
