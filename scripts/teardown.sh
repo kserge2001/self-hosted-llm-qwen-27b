@@ -59,6 +59,8 @@ done
 echo "== 2c. Disks: the EBS CSI driver deletes the volumes behind the PVCs"
 # A PVC is only deleted when no pod uses it, so first stop the StatefulSets and Jobs that hold them.
 kubectl -n models delete job model-loader --ignore-not-found --wait=true
+# The Prometheus operator would recreate its StatefulSets, so delete what it manages first.
+kubectl delete prometheus,alertmanager --all --all-namespaces --ignore-not-found --wait=true
 for ns in $(kubectl get pvc -A -o jsonpath='{.items[*].metadata.namespace}' | tr ' ' '\n' | sort -u); do
   kubectl -n "$ns" delete statefulset --all --wait=true
 done

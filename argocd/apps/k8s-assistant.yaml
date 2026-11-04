@@ -2,7 +2,7 @@
 # Argo CD applies this file because it is under argocd/ (the root app reads that folder).
 # An ApplicationSet with the cluster generator makes one Application "k8s-assistant". It fills the
 # repository, the gateway's domain and the ECR image repository from the cluster Secret Terraform
-# made (GitOps Bridge). The image tag is in apps/k8s-assistant/deploy/kustomization.yaml.
+# made (GitOps Bridge). The image tag is set below, under kustomize.images.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -28,8 +28,9 @@ spec:
         path: apps/k8s-assistant/deploy
         kustomize:
           images:
-            # The ECR repository Terraform made. The tag stays the one in kustomization.yaml.
-            - 'k8s-assistant={{ .metadata.annotations.app_image_repo }}'
+            # The image to run: the ECR repository Terraform made, and the tag you pushed.
+            # Deploying a new version = docker push with a new tag, then change the tag here and git push.
+            - 'k8s-assistant={{ .metadata.annotations.app_image_repo }}:0.1.0'
           patches:
             # The gateway URL depends on the domain, so it is set here and not in Git.
             - target:

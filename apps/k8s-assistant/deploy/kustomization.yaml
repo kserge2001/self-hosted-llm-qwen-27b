@@ -5,8 +5,5 @@ resources:
   - rbac.yaml
   - externalsecret.yaml
   - deployment.yaml
-images:
-  # Deploying a new version = pushing an image with a new tag, then changing newTag here and pushing.
-  # Argo CD sets the repository (newName) to the ECR repository Terraform made.
-  - name: k8s-assistant
-    newTag: "0.1.0"
+# The image (ECR repository and tag) is set by Argo CD: kustomize.images in
+# argocd/apps/k8s-assistant.yaml replaces "k8s-assistant" in deployment.yaml.
