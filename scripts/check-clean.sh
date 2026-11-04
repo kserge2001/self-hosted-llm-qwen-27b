@@ -76,7 +76,7 @@ check "ACM certificate"                    aws acm list-certificates --output te
   --query "CertificateSummaryList[?DomainName=='astra.$DOMAIN'].CertificateArn"
 check "IAM roles"                          aws iam list-roles --output text \
   --query "Roles[?starts_with(RoleName, '$NAME-') || starts_with(RoleName, 'KarpenterController') || starts_with(RoleName, 'system-eks-node-group')].RoleName"
-check "SQS queue (Karpenter)"              aws sqs list-queues --queue-name-prefix "$NAME" --output text --query 'QueueUrls[]'
+check "SQS queue (Karpenter)"              aws sqs list-queues --queue-name-prefix "Karpenter-$NAME" --output text --query 'QueueUrls[]'
 check "EventBridge rules (Karpenter)"      aws events list-rules --output text \
   --query "Rules[?starts_with(Name, 'Karpenter')].Name"
 check "CloudWatch log groups"              aws logs describe-log-groups --log-group-name-prefix "/aws/eks/$NAME" --output text \
