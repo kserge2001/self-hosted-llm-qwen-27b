@@ -45,8 +45,23 @@ start() {
   local rev=${1:-}
   [ ${#rev} = 40 ] || { echo "Usage: canary.sh start <40-character revision>"; exit 1; }
   [ ! -f "$CANARY_APP" ] || { echo "A canary already exists: $CANARY_APP"; exit 1; }
-  [ "$rev" != "$(yq '.model.revision' "$MAIN_VALUES")" ] || { echo "The main release already serves $rev."; exit 1; }
+  local cur
+  cur=$(yq '.model.revision' "$MAIN_VALUES")
+  [ "$rev" != "$cur" ] || { echo "The main release already serves $rev."; exit 1; }
   clean_tree
+
+  # The new revision must be in S3 (the loader writes SHA256SUMS last), and it must hold other files.
+  # Two Hugging Face commits can have the same weights (a commit that only changes the README);
+  # a canary of identical files costs a GPU node and tests nothing. FORCE=1 skips this check.
+  local base new old
+  base="s3://astra-models-$(aws sts get-caller-identity --query Account --output text)/$(yq '.model.name' "$MAIN_VALUES")"
+  new=$(aws s3 cp --quiet "$base/$rev/SHA256SUMS" - 2>/dev/null) || { echo "$rev is not in S3 yet: run the loader Job first (model/)."; exit 1; }
+  old=$(aws s3 cp --quiet "$base/$cur/SHA256SUMS" - 2>/dev/null) || old=""
+  if [ "$new" = "$old" ] && [ "${FORCE:-0}" != 1 ]; then
+    echo "$rev has the same files as the serving revision $cur (SHA256SUMS match)."
+    echo "Nothing to test. To run the canary anyway (for practice): FORCE=1 bash scripts/canary.sh start $rev"
+    exit 1
+  fi
 
   # The canary values: the main values with the new revision.
   REV=$rev yq '.model.revision = strenv(REV)' "$MAIN_VALUES" > "$CANARY_VALUES"
