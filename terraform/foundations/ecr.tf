@@ -1,6 +1,7 @@
-# A private image registry for the apps that call the gateway. You build the image on your laptop
-# and push it here (see apps/k8s-assistant/README.md). The nodes pull from it with their own role:
-# the Karpenter node role has AmazonEC2ContainerRegistryPullOnly.
+# Private image registries. You build each image on your laptop and push it here:
+#   astra/k8s-assistant  the example app (apps/k8s-assistant/README.md)
+#   astra/litellm        the gateway: the official LiteLLM image plus the MLflow client (gateway/litellm/image)
+# The nodes pull with their own role: the Karpenter node role has AmazonEC2ContainerRegistryPullOnly.
 
 resource "aws_ecr_repository" "app" {
   name                 = "${var.name}/k8s-assistant"
@@ -27,4 +28,23 @@ resource "aws_ecr_lifecycle_policy" "app" {
       action       = { type = "expire" }
     }]
   })
+}
+
+resource "aws_ecr_repository" "gateway" {
+  name                 = "${var.name}/litellm"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = true # lab only
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "gateway" {
+  repository = aws_ecr_repository.gateway.name
+  policy     = aws_ecr_lifecycle_policy.app.policy # the same rule: keep the last 10 images
 }

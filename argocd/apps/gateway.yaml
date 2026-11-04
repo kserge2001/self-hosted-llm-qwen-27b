@@ -31,8 +31,11 @@ spec:
             valueFiles:
               - $repo/gateway/litellm/values.yaml
             valuesObject:
+              image:
+                repository: '{{ .metadata.annotations.gateway_image_repo }}'   # our image in ECR
               envVars:
                 AWS_REGION: '{{ .metadata.annotations.aws_region }}'
+                MLFLOW_TRACKING_URI: '{{ .metadata.annotations.mlflow_tracking_arn }}'
                 BEDROCK_GUARDRAIL_ID: '{{ .metadata.annotations.bedrock_guardrail_id }}'
                 BEDROCK_GUARDRAIL_VERSION: '{{ .metadata.annotations.bedrock_guardrail_version }}'
               ingress:

@@ -3,9 +3,11 @@
 # rate limit, masks personal data, records spend, then forwards to vLLM.
 # Values that depend on the cluster (domain, certificate, guardrail id) come from argocd/apps/gateway.yaml.
 
+# Our gateway image in ECR (gateway/litellm/image): official LiteLLM v1.106.5 + the MLflow client.
+# Argo CD sets the repository from the cluster Secret (argocd/apps/gateway.yaml). Build and push it first.
 image:
-  repository: ghcr.io/berriai/litellm
-  tag: v1.106.5           # checked 2026-10-28; the chart default "Always" pull is not needed for a fixed tag
+  repository: astra/litellm   # replaced by argocd/apps/gateway.yaml
+  tag: v1.106.5-mlflow1     # LiteLLM v1.106.5 (checked 2026-10-28), our build 1; a fixed tag needs no "Always" pull
   pullPolicy: IfNotPresent
 
 replicaCount: 2
@@ -54,7 +56,7 @@ db:
 masterkeySecretName: litellm-env
 masterkeySecretKey: LITELLM_MASTER_KEY
 
-# LITELLM_SALT_KEY, VLLM_API_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST.
+# LITELLM_SALT_KEY, VLLM_API_KEY.
 environmentSecrets:
   - litellm-env
 
@@ -63,7 +65,10 @@ envVars:
   REDIS_PORT: "6379"
   PRESIDIO_ANALYZER_API_BASE: http://presidio-analyzer.gateway.svc.cluster.local:3000
   PRESIDIO_ANONYMIZER_API_BASE: http://presidio-anonymizer.gateway.svc.cluster.local:3000
-  # AWS_REGION, BEDROCK_GUARDRAIL_ID and BEDROCK_GUARDRAIL_VERSION are added by argocd/apps/gateway.yaml.
+  MLFLOW_EXPERIMENT_NAME: astra-gateway   # the traces go to this experiment in the MLflow App
+  MLFLOW_DISABLE_AGENT_HINT: "1"          # MLflow 3.18 prints a hint line at import; keep the gateway log clean
+  # AWS_REGION, BEDROCK_GUARDRAIL_ID, BEDROCK_GUARDRAIL_VERSION and MLFLOW_TRACKING_URI (the MLflow App ARN)
+  # are added by argocd/apps/gateway.yaml.
 
 # Migration Job as an Argo CD Sync hook in wave 1, not PreSync:
 # a PreSync hook would run before its own service account and database Secret exist.
@@ -147,12 +152,10 @@ proxy_config:
 
   litellm_settings:
     callbacks: ["prometheus"]          # spend and requests per team, scraped by Prometheus
-    # Langfuse Cloud is outside the company. turn_off_message_logging keeps prompts and answers out
-    # of it: Langfuse gets the metadata only (team, user, model, tokens, cost, latency, errors).
-    # Company data stays inside. A company that wants the text in its traces self-hosts Langfuse.
-    turn_off_message_logging: true
-    success_callback: ["langfuse"]     # one trace per request in Langfuse Cloud
-    failure_callback: ["langfuse"]
+    # One trace per request in the MLflow App, in your own AWS account: prompt, answer, team, user,
+    # tokens, cost, latency, errors. Presidio has already masked personal data in the prompt.
+    success_callback: ["mlflow"]
+    failure_callback: ["mlflow"]
     drop_params: true
 
   # Guardrails run on every request (default_on). Order: Presidio masks PII, then Bedrock checks

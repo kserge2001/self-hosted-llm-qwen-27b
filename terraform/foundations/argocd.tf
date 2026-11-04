@@ -51,6 +51,8 @@ locals {
     karpenter_node_role       = module.karpenter.node_iam_role_name
     karpenter_queue           = module.karpenter.queue_name
     app_image_repo            = aws_ecr_repository.app.repository_url
+    gateway_image_repo        = aws_ecr_repository.gateway.repository_url
+    mlflow_tracking_arn       = aws_sagemaker_mlflow_app.this.arn # MLFLOW_TRACKING_URI of the gateway
     repo_url                  = var.repo_url
     repo_revision             = var.repo_revision
   }

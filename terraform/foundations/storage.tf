@@ -1,8 +1,10 @@
-# One bucket, named <name>-models-<account> (bucket names are global): the model weights,
-# prefix <model>/<revision>/ (written by the Job in model/).
+# Two buckets, named <name>-<job>-<account> (bucket names are global).
+#   models - model weights, prefix <model>/<revision>/ (written by the Job in model/)
+#   mlflow - the artifact store of the MLflow App (mlflow.tf)
 locals {
   buckets = {
     models = "${var.name}-models-${local.account_id}"
+    mlflow = "${var.name}-mlflow-${local.account_id}"
   }
 }
 

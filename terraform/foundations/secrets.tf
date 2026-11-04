@@ -1,10 +1,9 @@
 # Every secret of the platform lives in AWS Secrets Manager under astra/.
 # External Secrets copies them into the cluster, so no secret is ever written to Git.
 #
-# Terraform generates most values. Two it cannot know, so it creates only the empty secret
-# and you set the value with the AWS CLI (see the fill_hf_token and fill_langfuse_keys outputs):
+# Terraform generates most values. One it cannot know, so it creates only the empty secret
+# and you set the value with the AWS CLI (see the `fill_hf_token` output):
 #   astra/hf-token          a Hugging Face read token, used by the model loader Job
-#   astra/langfuse/cloud    the keys of your Langfuse Cloud project, used by the gateway
 # astra/teams/<team> is not here: gateway/sync_teams.py writes those.
 
 locals {
@@ -62,7 +61,7 @@ locals {
   }
 
   # Secrets you fill in by hand.
-  student_secrets = toset(["hf-token", "langfuse/cloud"])
+  student_secrets = toset(["hf-token"])
 }
 
 resource "aws_secretsmanager_secret" "generated" {

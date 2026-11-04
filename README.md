@@ -20,11 +20,11 @@ cd self-hosted-llm-qwen-27b
 
 | Who | What it does here |
 |---|---|
-| You, with `terraform` | `terraform/bootstrap` (the state bucket), then `terraform/foundations`: VPC, EKS, Karpenter, IAM, S3, ECR, RDS, secrets, the certificate, the Bedrock guardrail, Argo CD and its one root app |
+| You, with `terraform` | `terraform/bootstrap` (the state bucket), then `terraform/foundations`: VPC, EKS, Karpenter, IAM, S3, ECR, RDS, secrets, the certificate, the Bedrock guardrail, the SageMaker MLflow App, Argo CD and its one root app |
 | Argo CD | applies every file under `argocd/` from your repository, and keeps the cluster equal to Git. You never run `helm install`. |
 | You, with `kubectl` | start the model loader Job (`model/`), look at things, port-forward to the UIs |
 | You, with scripts | `gateway/sync_teams.py` (team keys), `scripts/canary.sh`, `scripts/load.sh`, `scripts/spend-report.sh`, `scripts/teardown.sh` |
-| You, with `docker` | build the app image and push it to ECR |
+| You, with `docker` | build the gateway image and the app image, and push them to ECR |
 
 There is no CI in this build. Every step is a command you run, so you see each one happen. The guide explains what a company automates and how.
 
@@ -39,7 +39,7 @@ There is no CI in this build. Every step is a command you run, so you see each o
 | `platform/` | small charts the add-ons use: cluster basics, NodePools, policies, dashboards, the database Job | Argo CD |
 | `model/` | the model spec and the loader Job: download, scan, upload to S3 | you (`kubectl apply -k`) |
 | `serving/` | our vLLM Helm chart and the values of the version that serves | Argo CD |
-| `gateway/` | LiteLLM and Presidio settings, `teams.yaml`, `sync_teams.py` (traces go to Langfuse Cloud) | Argo CD, and you for the teams |
+| `gateway/` | LiteLLM and Presidio settings, the gateway image (`litellm/image`), `teams.yaml`, `sync_teams.py`. Traces go to the SageMaker MLflow App. | Argo CD, and you for the image and the teams |
 | `apps/k8s-assistant/` | an app that uses Astra: code, tests, Dockerfile, Kubernetes manifests | you (docker), Argo CD (deploy) |
 | `scripts/` | canary, test traffic, spend report, teardown | you |
 | `runbooks/` | what to do when something goes wrong | you |

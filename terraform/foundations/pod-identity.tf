@@ -54,6 +54,12 @@ locals {
           actions   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
           resources = ["arn:${local.partition}:bedrock:*::foundation-model/*", "arn:${local.partition}:bedrock:*:${local.account_id}:inference-profile/*"]
         },
+        {
+          # One trace per request to the MLflow App (the sagemaker-mlflow plugin signs with this role).
+          sid       = "WriteTraces"
+          actions   = ["sagemaker:CallMlflowAppApi"]
+          resources = [aws_sagemaker_mlflow_app.this.arn]
+        },
       ]
     }
   }

@@ -81,6 +81,8 @@ check "EventBridge rules (Karpenter)"      aws events list-rules --output text \
   --query "Rules[?starts_with(Name, 'Karpenter')].Name"
 check "CloudWatch log groups"              aws logs describe-log-groups --log-group-name-prefix "/aws/eks/$NAME" --output text \
   --query 'logGroups[].logGroupName'
+check "MLflow App (SageMaker AI)"          aws sagemaker list-mlflow-apps --output text \
+  --query "Summaries[?Name=='$NAME' && Status!='Deleted'].Arn"
 check "Bedrock guardrail"                  aws bedrock list-guardrails --output text \
   --query "guardrails[?name=='$NAME-guardrail'].id"
 

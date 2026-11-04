@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Sends test requests through the gateway and counts which backend answered each one.
 # Use it during a canary: with weight 10, about 10% should come from the canary.
-# It also gives Grafana traffic to compare the two releases.
+# It also gives Grafana and MLflow traffic to compare the two releases.
 #
 #   bash scripts/load.sh [requests] [team]      defaults: 100 requests, team platform-loadtest
 #
@@ -25,7 +25,7 @@ for _ in $(seq 30); do   # up to 30 s for the port-forward to open
   sleep 1
 done
 
-# A few different questions, so the traffic is not one prompt repeated.
+# A few different questions, so the answers are worth comparing in MLflow.
 QUESTIONS=(
   "In one sentence: what does a Kubernetes readiness probe do?"
   "List three reasons a pod can stay in Pending."

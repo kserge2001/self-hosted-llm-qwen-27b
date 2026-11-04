@@ -16,7 +16,7 @@ output "vpc_id" {
 }
 
 output "buckets" {
-  description = "S3 bucket for the model weights."
+  description = "S3 buckets: model weights, MLflow artifacts."
   value       = { for k, b in aws_s3_bucket.this : k => b.bucket }
 }
 
@@ -56,13 +56,14 @@ output "fill_hf_token" {
   value       = "aws secretsmanager put-secret-value --region ${var.region} --secret-id ${aws_secretsmanager_secret.student["hf-token"].name} --secret-string 'hf_xxx'"
 }
 
-output "fill_langfuse_keys" {
-  description = "Keys of a Langfuse Cloud project (cloud.langfuse.com > your project > Settings > API Keys). host: the region you signed up in."
-  value       = <<-EOT
-    aws secretsmanager put-secret-value --region ${var.region} \
-      --secret-id ${aws_secretsmanager_secret.student["langfuse/cloud"].name} \
-      --secret-string '{"public_key":"pk-lf-...","secret_key":"sk-lf-...","host":"https://cloud.langfuse.com"}'
-  EOT
+output "gateway_image_repo" {
+  description = "ECR repository for the gateway image (gateway/litellm/image). docker push goes here."
+  value       = aws_ecr_repository.gateway.repository_url
+}
+
+output "mlflow_tracking_arn" {
+  description = "ARN of the SageMaker MLflow App. With the sagemaker-mlflow plugin it is the MLFLOW_TRACKING_URI."
+  value       = aws_sagemaker_mlflow_app.this.arn
 }
 
 output "app_image_repo" {
