@@ -4,5 +4,5 @@ output "state_bucket" {
 }
 
 output "next_step" {
-  value = "cd ../terraform && terraform init -backend-config=backend.hcl"
+  value = "cd ../foundations && terraform init -backend-config=backend.hcl"
 }

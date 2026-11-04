@@ -87,11 +87,11 @@ resource "aws_s3_bucket_policy" "state" {
 }
 
 # --- Backend settings for the main stack ------------------------------------------------------------
-# `terraform init -backend-config=backend.hcl` in ../terraform reads this file.
+# `terraform init -backend-config=backend.hcl` in ../foundations reads this file.
 # use_lockfile = S3 native locking (a .tflock object). No DynamoDB table needed any more.
 
 resource "local_file" "backend" {
-  filename        = "${path.module}/../terraform/backend.hcl"
+  filename        = "${path.module}/../foundations/backend.hcl"
   file_permission = "0644"
   content         = <<-EOT
     bucket       = "${aws_s3_bucket.state.bucket}"
