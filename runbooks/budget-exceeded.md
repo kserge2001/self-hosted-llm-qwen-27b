@@ -1,8 +1,8 @@
 # Runbook: a team's budget is used up
 
-**Signs:** the team's app gets HTTP 429 from the gateway, and the error body has `"type": "budget_exceeded"`. The team asks why Astra stopped working.
+**Signs:** the team's app gets an error from the gateway with `"type": "budget_exceeded"` in the body. The team asks why Astra stopped working.
 
-A rate limit also gives HTTP 429. So look at the `type` field, not at the status code, to know it is the budget.
+The status code depends on the LiteLLM version: 422 in v1.106.5 (measured), 429 in older versions. A rate limit gives 429 too. So look at the `type` field, not at the status code, to know it is the budget. The k8s-assistant app turns it into 429 for its own callers.
 
 1. See the spend of every team: `bash scripts/spend-report.sh`
 2. Find out what used the budget. In MLflow (the SageMaker MLflow App, experiment `astra-gateway`), filter the traces by the tag `team:<name>` and look at the cost. The `user` field shows which person or job sent the requests.

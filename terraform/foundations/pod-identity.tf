@@ -41,7 +41,9 @@ locals {
     }
     litellm = {
       namespace = "gateway"
-      s3        = {}
+      # The MLflow client writes each trace's body (traces.json) straight to the MLflow bucket with
+      # this role; the App API call only registers the trace. Without it: AccessDenied, no traces.
+      s3 = { mlflow = local.s3_write }
       extra = [
         {
           sid       = "ApplyGuardrail"

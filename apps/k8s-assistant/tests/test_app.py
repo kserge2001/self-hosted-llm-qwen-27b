@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace as NS
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app import agent, kube, main
@@ -81,17 +82,18 @@ def test_ask_rejects_empty_question():
     assert TestClient(main.app).post("/ask", json={"question": ""}).status_code == 422
 
 
-def test_budget_exceeded_is_429_with_a_clear_message(monkeypatch):
-    # What LiteLLM sent in the first build: HTTP 429 with "type": "budget_exceeded".
+@pytest.mark.parametrize("gateway_status", [429, 422])
+def test_budget_exceeded_is_429_with_a_clear_message(monkeypatch, gateway_status):
+    # LiteLLM sends "type": "budget_exceeded" with HTTP 429 (first build) or 422 (v1.106.5).
     import httpx
-    from openai import RateLimitError
+    from openai import APIStatusError
 
     request = httpx.Request("POST", "http://gateway/v1/chat/completions")
-    response = httpx.Response(429, request=request)
+    response = httpx.Response(gateway_status, request=request)
     body = {"message": "Budget has been exceeded", "type": "budget_exceeded"}
 
     def over_budget(*_):
-        raise RateLimitError("Budget has been exceeded", response=response, body=body)
+        raise APIStatusError("Budget has been exceeded", response=response, body=body)
 
     monkeypatch.setattr(main.agent, "ask", over_budget)
     monkeypatch.setattr(main, "get_client", lambda: None)
