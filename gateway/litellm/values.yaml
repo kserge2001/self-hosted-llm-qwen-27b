@@ -114,7 +114,7 @@ proxy_config:
         output_cost_per_token: 0.000002
         # weight: 90            # uncomment with the canary entry below
 
-        weight: 90
+        weight: 75
       model_info:
         description: Qwen3.8-27B (FP8) on vLLM, self-hosted on EKS
     # "astra" is the product name apps use. The model behind it can change without any app changing.
@@ -130,7 +130,7 @@ proxy_config:
         output_cost_per_token: 0.000002
         # weight: 90            # uncomment with the canary entry below
 
-        weight: 10
+        weight: 25
       model_info:
         description: Qwen3.8-27B (FP8) on vLLM, self-hosted on EKS
         id: astra-canary
