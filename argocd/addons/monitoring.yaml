@@ -196,6 +196,8 @@ spec:
             serviceMonitor:
               enabled: true
               interval: 15s
+              # The chart default is 25s; the operator rejects a timeout longer than the interval.
+              scrapeTimeout: 10s
             resources:
               requests: {cpu: 50m, memory: 128Mi}
               limits: {memory: 512Mi}
