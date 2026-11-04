@@ -15,8 +15,8 @@ spec:
     - tags:
         karpenter.sh/discovery: {{ .Values.clusterName | quote }}
   blockDeviceMappings:
-    - deviceName: /dev/xvda             # Bottlerocket OS disk
-      ebs: {volumeSize: 4Gi, volumeType: gp3, encrypted: true}
+    - deviceName: /dev/xvda             # Bottlerocket OS disk. The NVIDIA variant's image needs at least 6 GB
+      ebs: {volumeSize: 8Gi, volumeType: gp3, encrypted: true}
     - deviceName: /dev/xvdb             # data disk: container images and the model cache
       ebs: {volumeSize: 200Gi, volumeType: gp3, iops: 6000, throughput: 500, encrypted: true}
   # Bottlerocket ignores NVIDIA_VISIBLE_DEVICES in unprivileged pods by default.
