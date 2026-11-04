@@ -56,6 +56,7 @@ start() {
     .metadata.name = "serving-canary"
     | .spec.template.metadata.name = "serving-canary"
     | .spec.template.spec.source.helm.releaseName = "vllm-canary"
+    | .spec.template.spec.source.helm.releaseName line_comment = "Service \"vllm-canary\" -> vllm-canary.serving.svc:8000"
     | .spec.template.spec.source.helm.valueFiles = ["../values/qwen3.8-27b-canary.yaml"]
     | .spec.template.spec.source.helm.valuesObject.canary = true
     | . head_comment = "Canary of a model upgrade, made by scripts/canary.sh start. Removed by promote or rollback."
