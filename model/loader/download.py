@@ -12,11 +12,21 @@ import spec as specs
 
 
 def hf_token():
-    # The token lives in Secrets Manager; the Job reads it with its Pod Identity role.
+    """The Hugging Face token from Secrets Manager (the Job reads it with its Pod Identity role).
+
+    Optional: this model is public. Without a token the download is anonymous, with lower rate limits.
+    A gated or private model needs one.
+    """
     if os.environ.get("HF_TOKEN"):
         return os.environ["HF_TOKEN"]
-    secret = boto3.client("secretsmanager").get_secret_value(SecretId="astra/hf-token")
-    return secret["SecretString"].strip()
+    sm = boto3.client("secretsmanager")
+    try:
+        value = sm.get_secret_value(SecretId="astra/hf-token")["SecretString"].strip()
+    except sm.exceptions.ResourceNotFoundException:  # the secret exists but has no value yet
+        value = ""
+    if not value:
+        print("no Hugging Face token in astra/hf-token: downloading without one")
+    return value or None
 
 
 def check_weights(folder):

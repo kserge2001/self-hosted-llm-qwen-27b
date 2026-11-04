@@ -1,0 +1,2 @@
+# Latest stable on PyPI, checked 2026-10-28 (the same version as apps/k8s-assistant).
+openai==3.40.0

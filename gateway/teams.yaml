@@ -4,6 +4,10 @@
 #   rpm / tpm:  requests and tokens per minute for the whole team
 # Removing a team here does not delete it in LiteLLM; delete it by hand after its apps stop.
 teams:
+  - name: hello-assistant        # apps/hello-assistant, the smallest app that calls Astra
+    budget_usd: 5
+    rpm: 30
+    tpm: 100000
   - name: hr-assistant
     budget_usd: 50
     rpm: 60
