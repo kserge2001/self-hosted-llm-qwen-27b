@@ -44,7 +44,7 @@ check "Load balancers and target groups"   aws resourcegroupstaggingapi get-reso
   --tag-filters "Key=elbv2.k8s.aws/cluster,Values=$NAME" \
   --resource-type-filters elasticloadbalancing:loadbalancer elasticloadbalancing:targetgroup \
   --query 'ResourceTagMappingList[].ResourceARN'
-ZONE=$(aws route53 list-hosted-zones-by-name --dns-name "$DOMAIN" --query 'HostedZones[0].Id' --output text 2>/dev/null)
+ZONE=$(aws route53 list-hosted-zones-by-name --dns-name "$DOMAIN" --query "HostedZones[?Name=='$DOMAIN.'].Id | [0]" --output text 2>/dev/null)
 check "Route 53 records (ExternalDNS, ACM)" aws route53 list-resource-record-sets --hosted-zone-id "$ZONE" --output text \
   --query "ResourceRecordSets[?contains(Name, 'astra.$DOMAIN') || contains(Name, 'argocd.$DOMAIN') || contains(Name, 'grafana.$DOMAIN')].[Type,Name]"
 

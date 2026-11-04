@@ -152,8 +152,9 @@ proxy_config:
 
   litellm_settings:
     callbacks: ["prometheus"]          # spend and requests per team, scraped by Prometheus
-    # One trace per request in the MLflow App, in your own AWS account: prompt, answer, team, user,
-    # tokens, cost, latency, errors. Presidio has already masked personal data in the prompt.
+    # One trace per request in the MLflow App, in your own AWS account: the request and the answer,
+    # plus what LiteLLM adds (check your first traces for the exact fields). Presidio masks personal
+    # data in the prompt before it is sent on.
     success_callback: ["mlflow"]
     failure_callback: ["mlflow"]
     drop_params: true

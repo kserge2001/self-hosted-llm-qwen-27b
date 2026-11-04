@@ -12,7 +12,7 @@ resource "aws_s3_bucket" "this" {
   for_each = local.buckets
 
   bucket        = each.value
-  force_destroy = true # lab only: lets `terraform destroy` delete the 31 GB of weights
+  force_destroy = true # lab only: lets `terraform destroy` delete the buckets with their files (weights, MLflow artifacts)
 }
 
 resource "aws_s3_bucket_versioning" "this" {
