@@ -1,7 +1,7 @@
 # LiteLLM gateway: official chart oci://ghcr.io/berriai/litellm-helm 1.106.5 (latest stable, checked 2026-10-28).
 # Every app calls Astra through it with its own team key. It checks the key, the team's budget and
 # rate limit, masks personal data, records spend, then forwards to vLLM.
-# Values that depend on the cluster (domain, certificate, guardrail id) come from argocd/gateway.yaml.
+# Values that depend on the cluster (domain, certificate, guardrail id) come from argocd/apps/gateway.yaml.
 
 image:
   repository: ghcr.io/berriai/litellm
@@ -64,7 +64,7 @@ envVars:
   PRESIDIO_ANALYZER_API_BASE: http://presidio-analyzer.gateway.svc.cluster.local:3000
   PRESIDIO_ANONYMIZER_API_BASE: http://presidio-anonymizer.gateway.svc.cluster.local:3000
   LANGFUSE_HOST: http://langfuse-web.langfuse.svc:3000
-  # AWS_REGION, BEDROCK_GUARDRAIL_ID and BEDROCK_GUARDRAIL_VERSION are added by argocd/gateway.yaml.
+  # AWS_REGION, BEDROCK_GUARDRAIL_ID and BEDROCK_GUARDRAIL_VERSION are added by argocd/apps/gateway.yaml.
 
 # Migration Job as an Argo CD Sync hook in wave 1, not PreSync:
 # a PreSync hook would run before its own service account and database Secret exist.
@@ -89,7 +89,7 @@ serviceMonitor:
   interval: 30s
 
 # The public door: https://astra.<domain> on the shared internal ALB. Only /v1 and /health.
-# Host and certificate are set in argocd/gateway.yaml.
+# Host and certificate are set in argocd/apps/gateway.yaml.
 ingress:
   enabled: true
   className: alb

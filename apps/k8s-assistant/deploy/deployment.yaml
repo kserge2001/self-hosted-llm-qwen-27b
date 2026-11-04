@@ -4,7 +4,7 @@ metadata:
   name: k8s-assistant
   namespace: k8s-assistant
 data:
-  # The gateway. argocd/k8s-assistant.yaml replaces example.com with your domain.
+  # The gateway. argocd/apps/k8s-assistant.yaml replaces example.com with your domain.
   OPENAI_BASE_URL: https://astra.example.com/v1
   ASTRA_MODEL: astra
 ---

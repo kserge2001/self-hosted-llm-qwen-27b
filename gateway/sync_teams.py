@@ -128,7 +128,7 @@ def ensure_key(gw, sm, team_name, team_id, dry_run):
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--teams", default=os.path.join(here, "..", "teams", "teams.yaml"))
+    parser.add_argument("--teams", default=os.path.join(here, "teams.yaml"))
     parser.add_argument("--gateway", default=os.environ.get("LITELLM_URL", "http://litellm.gateway.svc:4000"))
     parser.add_argument("--region", default=os.environ.get("AWS_REGION", "us-east-1"))
     parser.add_argument("--dry-run", action="store_true", help="show what would change, change nothing")
