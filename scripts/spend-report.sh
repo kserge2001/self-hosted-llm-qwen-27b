@@ -9,7 +9,7 @@
 set -euo pipefail
 
 PORT=${PORT:-4000}
-PY=python3; command -v python3 >/dev/null 2>&1 || PY=python
+PY=python3; python3 -c "" >/dev/null 2>&1 || PY=python   # on Windows, "python3" can be a Microsoft Store stub that does not run
 
 # The master key is in the gateway's Secret (synced from astra/litellm/master-key).
 MASTER=$(kubectl -n gateway get secret litellm-env -o jsonpath='{.data.LITELLM_MASTER_KEY}' | base64 -d)

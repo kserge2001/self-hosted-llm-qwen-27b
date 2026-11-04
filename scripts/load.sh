@@ -13,7 +13,7 @@ N=${1:-100}
 TEAM=${2:-platform-loadtest}
 PORT=${PORT:-4000}
 REGION=${AWS_REGION:-us-east-1}
-PY=python3; command -v python3 >/dev/null 2>&1 || PY=python
+PY=python3; python3 -c "" >/dev/null 2>&1 || PY=python   # on Windows, "python3" can be a Microsoft Store stub that does not run
 
 KEY=$(aws secretsmanager get-secret-value --region "$REGION" --secret-id "astra/teams/$TEAM" \
         --query SecretString --output text | $PY -c 'import json,sys; print(json.load(sys.stdin)["api_key"])')
