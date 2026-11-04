@@ -41,8 +41,9 @@ for i in $(seq 1 "$N"); do
   q=${QUESTIONS[$(( (i - 1) % ${#QUESTIONS[@]} ))]}
   body=$($PY -c 'import json,sys; print(json.dumps({"model": "astra", "max_tokens": 120, "user": "load-test",
     "messages": [{"role": "user", "content": sys.argv[1]}]}))' "$q")
-  code=$(curl -s -o /dev/null -D "$HEADERS" -w '%{http_code}' "http://localhost:$PORT/v1/chat/completions" \
-           -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d "$body")
+  # 000 means no answer at all (the port-forward dropped, or the 120 s limit passed).
+  code=$(curl -s --max-time 120 -o /dev/null -D "$HEADERS" -w '%{http_code}' "http://localhost:$PORT/v1/chat/completions" \
+           -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d "$body") || code=000
   if [ "$code" != 200 ]; then
     errors=$((errors + 1)); echo "request $i: HTTP $code"; continue
   fi

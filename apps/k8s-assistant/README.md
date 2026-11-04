@@ -52,7 +52,7 @@ docker build --platform linux/amd64 -t "$REPO:$TAG" apps/k8s-assistant
 docker push "$REPO:$TAG"
 ```
 
-3. Put the tag in `deploy/kustomization.yaml` (`newTag`), commit and push. Argo CD deploys it.
+3. Put the tag in `argocd/apps/k8s-assistant.yaml` (under `kustomize.images`), commit and push. Argo CD deploys it.
 
 4. promptfoo, against the real gateway (in a second terminal: `kubectl -n gateway port-forward svc/litellm 4000:4000`):
 
