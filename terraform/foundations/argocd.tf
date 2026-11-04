@@ -58,6 +58,7 @@ locals {
 
   gitops_labels = merge(
     { for addon, on in var.addons : "enable_${addon}" => tostring(on) },
+    { for app, on in var.apps : "enable_${app}" => tostring(on) },
     {
       "argocd.argoproj.io/secret-type" = "cluster" # makes Argo CD read this Secret as a cluster
       cluster_name                     = module.eks.cluster_name

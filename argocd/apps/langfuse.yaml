@@ -14,6 +14,7 @@ spec:
         selector:
           matchLabels:
             argocd.argoproj.io/secret-type: cluster
+            enable_langfuse: "true"     # turned on by the Terraform variable apps (terraform.tfvars)
   template:
     metadata:
       name: langfuse

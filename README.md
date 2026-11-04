@@ -1,8 +1,20 @@
-# Astra: an internal inference API on Amazon EKS (reference solution)
+# Astra: an internal inference API on Amazon EKS
 
 Astra is a company's own AI model API. Apps call it like OpenAI, with a base URL, a team key and the model name `astra`, but the model (Qwen3.8-27B) runs on the company's own GPUs in its own AWS account.
 
-This repository is the **finished build**. The guide on kodelumi walks you through creating each of these files yourself, in a near-empty repository made from the starter. Use this one to compare, or to copy a long file the guide points to.
+This repository holds everything you need to build it in your own AWS account. The guide on kodelumi explains each part and gives every command, step by step.
+
+## Start
+
+1. Fork this repository on GitHub and keep your fork **public**: Argo CD reads it from the cluster, and the guide's steps push small changes to it.
+2. Clone your fork and work in it:
+
+```bash
+git clone https://github.com/<your-user>/self-hosted-llm-qwen-27b.git
+cd self-hosted-llm-qwen-27b
+```
+
+3. Follow the guide from `03-foundations`. The apps are off at first: you turn each one on in its own step with the Terraform variable `apps`, so nothing that needs a GPU starts before the model is in S3.
 
 ## Who does what
 

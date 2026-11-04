@@ -9,6 +9,9 @@ domain = "lab.example.com"
 # Your public IP, from:  curl -s https://checkip.amazonaws.com
 admin_cidrs = ["203.0.113.7/32"]
 
-# Your own repository, made from the starter. Argo CD reads argocd/ from here.
-repo_url      = "https://github.com/<your-user>/<your-repo>.git"
+# Your copy (fork) of the repository. Argo CD reads argocd/ from here.
+repo_url      = "https://github.com/<your-user>/self-hosted-llm-qwen-27b.git"
 repo_revision = "main"
+
+# Which apps Argo CD deploys. Leave this out at first; the guide turns them on one at a time:
+# apps = { serving = true, gateway = true, langfuse = true, k8s_assistant = true }

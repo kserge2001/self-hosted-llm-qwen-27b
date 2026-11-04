@@ -15,6 +15,7 @@ spec:
         selector:
           matchLabels:
             argocd.argoproj.io/secret-type: cluster
+            enable_gateway: "true"     # turned on by the Terraform variable apps (terraform.tfvars)
   template:
     metadata:
       name: gateway

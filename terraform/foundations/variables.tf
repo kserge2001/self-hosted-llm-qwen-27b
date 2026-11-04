@@ -29,7 +29,7 @@ variable "admin_cidrs" {
 }
 
 variable "repo_url" {
-  description = "Git repository that Argo CD reads: your own repository, made from the starter. It must be public, or Argo CD needs a login for it."
+  description = "Git repository that Argo CD reads: your copy (fork) of the repository. It must be public, or Argo CD needs a login for it."
   type        = string
   # No default: Argo CD must read your repository.
 }
@@ -56,6 +56,17 @@ variable "admin_principal_arns" {
   description = "Extra IAM role or user ARNs that get cluster admin (for example an instructor role). The creator is always admin."
   type        = list(string)
   default     = []
+}
+
+variable "apps" {
+  description = "Which apps in argocd/apps Argo CD deploys. All off at first; the guide turns each one on in its own step. Each key becomes the label enable_<key> on the cluster Secret."
+  type = object({
+    serving       = optional(bool, false) # vLLM (argocd/apps/serving.yaml), needs the model in S3 first
+    gateway       = optional(bool, false) # LiteLLM, Redis, Presidio (argocd/apps/gateway.yaml)
+    langfuse      = optional(bool, false) # Langfuse (argocd/apps/langfuse.yaml)
+    k8s_assistant = optional(bool, false) # the example app (argocd/apps/k8s-assistant.yaml)
+  })
+  default = {}
 }
 
 variable "addons" {
