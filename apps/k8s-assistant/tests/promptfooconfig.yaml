@@ -19,8 +19,13 @@ providers:
 
 defaultTest:
   options:
-    # The judge for llm-rubric is Astra too, so no outside provider is needed.
-    provider: openai:chat:astra
+    # The judge for llm-rubric is Astra too, so no outside provider is needed. It has its own label
+    # and no tools: with the bare id, promptfoo reused the tested provider and the judge called list_pods.
+    provider:
+      id: openai:chat:astra
+      label: judge
+      config:
+        temperature: 0
   assert:
     - type: latency
       threshold: 30000  # 30 s: slower than this, a person gives up on the answer
@@ -41,6 +46,12 @@ tests:
       tool_result: >-
         [{"name": "web-7d9f-abcde", "phase": "Running", "ready": "1/1", "restarts": 0, "waiting": []},
          {"name": "web-7d9f-xk2lp", "phase": "Running", "ready": "0/1", "restarts": 14, "waiting": ["CrashLoopBackOff"]}]
+      events_result: >-
+        [{"object": "Pod/web-7d9f-xk2lp", "type": "Warning", "reason": "BackOff", "count": 14,
+          "message": "Back-off restarting failed container web in pod web-7d9f-xk2lp"}]
+      deployment_result: >-
+        {"name": "web", "replicas": 2, "ready_replicas": 1, "images": ["shop/web:2.4.1"],
+         "conditions": [{"type": "Available", "status": "True"}]}
     assert:
       - type: icontains
         value: web-7d9f-xk2lp
