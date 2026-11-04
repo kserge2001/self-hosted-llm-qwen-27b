@@ -48,9 +48,12 @@ REPO=$(terraform -chdir=terraform/foundations output -raw app_image_repo)
 REGION=$(terraform -chdir=terraform/foundations output -raw region)
 TAG=0.1.0
 aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "${REPO%%/*}"
-docker build --platform linux/amd64 -t "$REPO:$TAG" apps/k8s-assistant
+docker build --platform linux/amd64 --provenance=false -t "$REPO:$TAG" apps/k8s-assistant
 docker push "$REPO:$TAG"
 ```
+
+`--provenance=false` pushes one plain image. Without it, Docker pushes an image index with a provenance
+attestation, and ECR basic scanning cannot scan an index (it reports `UnsupportedImageTypeException`).
 
 3. Put the tag in `argocd/apps/k8s-assistant.yaml` (under `kustomize.images`), commit and push. Argo CD deploys it.
 
