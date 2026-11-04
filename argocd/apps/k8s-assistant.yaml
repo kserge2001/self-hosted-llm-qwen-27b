@@ -30,7 +30,7 @@ spec:
           images:
             # The image to run: the ECR repository Terraform made, and the tag you pushed.
             # Deploying a new version = docker push with a new tag, then change the tag here and git push.
-            - 'k8s-assistant={{ .metadata.annotations.app_image_repo }}:0.1.0'
+            - 'k8s-assistant={{ .metadata.annotations.app_image_repo }}:0.1.1'
           patches:
             # The gateway URL depends on the domain, so it is set here and not in Git.
             - target:
