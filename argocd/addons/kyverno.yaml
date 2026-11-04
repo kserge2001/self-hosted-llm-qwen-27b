@@ -25,6 +25,9 @@ spec:
       name: kyverno
       annotations:
         argocd.argoproj.io/sync-wave: "2"
+        # Kyverno's large CRDs show as OutOfSync with the default diff, though nothing differs.
+        # The API server computes the diff instead (Argo CD server-side diff).
+        argocd.argoproj.io/compare-options: ServerSideDiff=true
     spec:
       project: default
       source:
