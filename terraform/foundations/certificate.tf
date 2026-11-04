@@ -1,4 +1,4 @@
-# One certificate for the four host names behind the shared internal ALB.
+# One certificate for the three host names behind the shared internal ALB.
 # DNS validation needs public records, so the zone is public even though the ALB is internal.
 resource "aws_acm_certificate" "this" {
   domain_name               = local.hosts.gateway
