@@ -48,6 +48,9 @@ module "eks" {
     kube-proxy = {}
     vpc-cni = {
       before_compute = true
+      # Without this, EKS stores NetworkPolicy objects but nothing enforces them
+      # (the vLLM policy in serving/ would allow every namespace).
+      configuration_values = jsonencode({ enableNetworkPolicy = "true" })
     }
     eks-pod-identity-agent = {
       before_compute = true
