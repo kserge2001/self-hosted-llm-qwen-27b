@@ -24,7 +24,3 @@ teams:
     budget_usd: 0.01
     rpm: 5
     tpm: 20000
-  - name: k8s-assistant
-    budget_usd: 20
-    rpm: 60
-    tpm: 200000

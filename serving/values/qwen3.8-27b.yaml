@@ -8,5 +8,5 @@ image:
   tag: v0.32.0
 model:
   name: qwen3.8-27b # same as name in model/qwen3.8-27b.yaml
-  revision: 001718aae4c6e7936ec1999ab8501da0c045af82
+  revision: 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a
   servedName: astra
