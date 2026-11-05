@@ -113,27 +113,8 @@ proxy_config:
         input_cost_per_token: 0.0000005
         output_cost_per_token: 0.000002
         # weight: 90            # uncomment with the canary entry below
-
-        weight: 90
       model_info:
         description: Qwen3.8-27B (FP8) on vLLM, self-hosted on EKS
-    # "astra" is the product name apps use. The model behind it can change without any app changing.
-    - model_name: astra
-      litellm_params:
-        model: hosted_vllm/astra
-        api_base: http://vllm-canary.serving.svc:8000/v1
-        api_key: os.environ/VLLM_API_KEY
-        timeout: 300
-        # Internal price per token (chargeback): the GPU cost spread over the tokens the teams use.
-        # STARTING VALUES, tune them with scripts/spend-report.sh.
-        input_cost_per_token: 0.0000005
-        output_cost_per_token: 0.000002
-        # weight: 90            # uncomment with the canary entry below
-
-        weight: 10
-      model_info:
-        description: Qwen3.8-27B (FP8) on vLLM, self-hosted on EKS
-        id: astra-canary
   # Canary: a second vLLM release ("vllm-canary") with the new model gets a small share of traffic.
   # scripts/canary.sh weight 10 makes this change (main 90, canary 10, id astra-canary).
   # Same model name, so apps change nothing.
