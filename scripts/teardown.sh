@@ -10,6 +10,10 @@
 #   5. scripts/check-clean.sh lists anything that is still there (exit code 1 if something is).
 #
 # Run from the repository's main folder:  bash scripts/teardown.sh
+# It asks twice: "yes" for terraform destroy, then the state bucket's name. To run it without
+# questions (for example from another script), set both answers in advance:
+#   AUTO_APPROVE=1 CONFIRM_BUCKET=<state bucket name> bash scripts/teardown.sh
+# (Piping the answers in does not work with Terraform on Windows: it waits at its prompt.)
 set -euo pipefail
 
 [ -d terraform/foundations ] || { echo "Run from the repository's main folder."; exit 1; }
@@ -86,13 +90,14 @@ for id in $(aws secretsmanager list-secrets --region "$REGION" \
 done
 
 echo "== 3b. terraform destroy: foundations (prints a plan and asks for yes)"
-terraform -chdir=$TF destroy
+terraform -chdir=$TF destroy ${AUTO_APPROVE:+-auto-approve}
 
 echo "== 4. The bootstrap state bucket"
 # The bucket has prevent_destroy, so a plain terraform destroy refuses. That guard is on purpose:
 # it holds the only record of what Terraform built. Delete it by hand, and only now.
 BUCKET=$(terraform -chdir=terraform/bootstrap output -raw state_bucket)
-read -r -p "Type the bucket name to delete it and every old state version ($BUCKET): " answer
+answer=${CONFIRM_BUCKET:-}
+[ -n "$answer" ] || read -r -p "Type the bucket name to delete it and every old state version ($BUCKET): " answer
 [ "$answer" = "$BUCKET" ] || { echo "Not deleted."; exit 1; }
 VERSIONS=$(mktemp)
 # shellcheck disable=SC2016  # the backticks are a JMESPath literal for the AWS CLI, not a shell command
@@ -102,7 +107,7 @@ grep -q '"Key"' "$VERSIONS" && aws s3api delete-objects --bucket "$BUCKET" --del
 rm -f "$VERSIONS"
 aws s3api delete-bucket --bucket "$BUCKET"
 # Terraform now sees the bucket is gone and removes the rest (bucket settings, backend.hcl).
-terraform -chdir=terraform/bootstrap destroy
+terraform -chdir=terraform/bootstrap destroy ${AUTO_APPROVE:+-auto-approve}
 
 echo "== 5. Final check: is anything from this build left in the account?"
 bash scripts/check-clean.sh "$REGION" "$DOMAIN"
