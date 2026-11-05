@@ -1,0 +1,48 @@
+# Canary of a model upgrade, made by scripts/canary.sh start. Removed by promote or rollback.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: serving-canary
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            argocd.argoproj.io/secret-type: cluster
+            enable_serving: "true" # turned on by the Terraform variable apps (terraform.tfvars)
+  template:
+    metadata:
+      name: serving-canary
+    spec:
+      project: default
+      source:
+        repoURL: '{{ .metadata.annotations.repo_url }}'
+        targetRevision: '{{ .metadata.annotations.repo_revision }}'
+        path: serving/chart
+        helm:
+          releaseName: vllm-canary # Service "vllm-canary" -> vllm-canary.serving.svc:8000
+          valueFiles:
+            - ../values/qwen3.8-27b-canary.yaml
+          valuesObject:
+            region: '{{ .metadata.annotations.aws_region }}'
+            modelsBucket: '{{ .metadata.annotations.models_bucket }}'
+            canary: true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: serving
+      ignoreDifferences:
+        # KEDA owns the replica count.
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
