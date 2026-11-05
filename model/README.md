@@ -13,7 +13,7 @@ vLLM loads the weights from S3, not from Hugging Face. This folder copies them t
 
 ## Run it
 
-Needs: the cluster, `astra/hf-token` filled in (`terraform output fill_hf_token`).
+Needs: the cluster. The Hugging Face token in `astra/hf-token` (`terraform output fill_hf_token`) is optional: a public model downloads without it; a gated or private model needs it.
 
 ```bash
 kubectl apply -k model/
