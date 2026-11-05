@@ -19,7 +19,7 @@ The app cannot change the cluster. Its ClusterRole allows only `get` and `list` 
 | `app/` | the FastAPI app: `POST /ask`, `GET /health` |
 | `tests/test_app.py` | unit tests, no cluster and no gateway |
 | `tests/promptfooconfig.yaml` | promptfoo tests against the real gateway |
-| `Dockerfile` | slim image, runs as user 10001 |
+| `Dockerfile` | small Alpine image without pip, runs as user 10001 |
 | `deploy/` | namespace, read-only RBAC, ExternalSecret for the key, Deployment, Service |
 | `../../argocd/apps/k8s-assistant.yaml` | the Argo CD ApplicationSet |
 
@@ -68,8 +68,8 @@ cd apps/k8s-assistant && npx promptfoo@0.125.1 eval -c tests/promptfooconfig.yam
 ## Check it
 
 ```bash
-kubectl -n k8s-assistant port-forward svc/k8s-assistant 8080:80
-curl -s localhost:8080/ask -H 'Content-Type: application/json' \
+kubectl -n k8s-assistant port-forward svc/k8s-assistant 8081:80   # 8080 is the Argo CD tunnel
+curl -s localhost:8081/ask -H 'Content-Type: application/json' \
   -d '{"question": "Are all pods in the serving namespace ready?", "user": "maria.lopez@example.com"}'
 ```
 
