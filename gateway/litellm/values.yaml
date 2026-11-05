@@ -10,6 +10,15 @@ image:
   tag: v1.106.5-mlflow1 # LiteLLM v1.106.5 (checked 2026-10-28), our build 1; a fixed tag needs no "Always" pull
   pullPolicy: IfNotPresent
 replicaCount: 2
+# Rolling the gateway must not drop requests (measured: 7 of 100 failed without this).
+# preStop: the pod keeps serving for 15 s while the Service and the load balancer stop sending it
+# new requests. Then LiteLLM gets SIGTERM and waits for the requests it is still answering
+# (GRACEFUL_SHUTDOWN_TIMEOUT below, as long as the vLLM timeout). The grace period is a bit longer.
+lifecycle:
+  preStop:
+    sleep:
+      seconds: 15
+terminationGracePeriodSeconds: 330
 numWorkers: 1
 serviceAccount:
   create: true
@@ -57,6 +66,7 @@ envVars:
   PRESIDIO_ANONYMIZER_API_BASE: http://presidio-anonymizer.gateway.svc.cluster.local:3000
   MLFLOW_EXPERIMENT_NAME: astra-gateway # the traces go to this experiment in the MLflow App
   MLFLOW_DISABLE_AGENT_HINT: "1" # MLflow 3.18 prints a hint line at import; keep the gateway log clean
+  GRACEFUL_SHUTDOWN_TIMEOUT: "300" # on SIGTERM, finish running requests for up to 300 s (the vLLM timeout)
   # AWS_REGION, BEDROCK_GUARDRAIL_ID, BEDROCK_GUARDRAIL_VERSION and MLFLOW_TRACKING_URI (the MLflow App ARN)
   # are added by argocd/apps/gateway.yaml.
 # Migration Job as an Argo CD Sync hook in wave 1, not PreSync:
