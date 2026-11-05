@@ -116,7 +116,3 @@ networkPolicy:
   allowNamespaces:
     - gateway
     - monitoring
-
-dashboard:
-  enabled: true
-  namespace: monitoring   # the Grafana sidecar loads ConfigMaps labelled grafana_dashboard=1

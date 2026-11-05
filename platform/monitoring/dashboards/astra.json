@@ -30,8 +30,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (pod) (vllm:num_requests_running)",
-          "legendFormat": "{{team_alias}}{{pod}}",
+          "expr": "sum by (pod) (vllm:num_requests_running{namespace=\"serving\"})",
+          "legendFormat": "{{pod}}",
           "refId": "A"
         }
       ]
@@ -58,8 +58,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (pod) (vllm:num_requests_waiting)",
-          "legendFormat": "{{team_alias}}{{pod}}",
+          "expr": "sum by (pod) (vllm:num_requests_waiting{namespace=\"serving\"})",
+          "legendFormat": "{{pod}}",
           "refId": "A"
         }
       ]
@@ -86,8 +86,8 @@
       },
       "targets": [
         {
-          "expr": "max by (pod) (vllm:kv_cache_usage_perc)",
-          "legendFormat": "{{team_alias}}{{pod}}",
+          "expr": "max by (pod) (vllm:kv_cache_usage_perc{namespace=\"serving\"})",
+          "legendFormat": "{{pod}}",
           "refId": "A"
         }
       ]
@@ -114,8 +114,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (pod) (rate(vllm:generation_tokens_total[1m]))",
-          "legendFormat": "{{team_alias}}{{pod}}",
+          "expr": "sum by (pod) (rate(vllm:generation_tokens_total{namespace=\"serving\"}[1m]))",
+          "legendFormat": "{{pod}}",
           "refId": "A"
         }
       ]
@@ -142,7 +142,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket{namespace=\"serving\"}[5m])))",
           "legendFormat": "p95",
           "refId": "A"
         }
@@ -170,7 +170,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket{namespace=\"serving\"}[5m])))",
           "legendFormat": "p95",
           "refId": "A"
         }
@@ -199,7 +199,7 @@
       "targets": [
         {
           "expr": "sum by (team_alias) (increase(litellm_spend_metric_total[24h]))",
-          "legendFormat": "{{team_alias}}{{pod}}",
+          "legendFormat": "{{team_alias}}",
           "refId": "A"
         }
       ]
@@ -227,7 +227,7 @@
       "targets": [
         {
           "expr": "sum by (team_alias) (increase(litellm_total_tokens_metric_total[24h]))",
-          "legendFormat": "{{team_alias}}{{pod}}",
+          "legendFormat": "{{team_alias}}",
           "refId": "A"
         }
       ]
@@ -254,8 +254,8 @@
       },
       "targets": [
         {
-          "expr": "max by (team_alias) (litellm_remaining_team_budget_metric)",
-          "legendFormat": "{{team_alias}}{{pod}}",
+          "expr": "min by (team_alias) (last_over_time(litellm_remaining_team_budget_metric[1d]))",
+          "legendFormat": "{{team_alias}}",
           "refId": "A"
         }
       ]
@@ -283,7 +283,7 @@
       "targets": [
         {
           "expr": "sum by (team_alias) (rate(litellm_proxy_total_requests_metric_total[5m])) * 60",
-          "legendFormat": "{{team_alias}}{{pod}}",
+          "legendFormat": "{{team_alias}}",
           "refId": "A"
         }
       ]
@@ -311,10 +311,11 @@
       "targets": [
         {
           "expr": "sum by (team_alias) (rate(litellm_proxy_failed_requests_metric_total[5m])) * 60",
-          "legendFormat": "{{team_alias}}{{pod}}",
+          "legendFormat": "{{team_alias}}",
           "refId": "A"
         }
       ]
     }
-  ]
+  ],
+  "description": "vLLM serving health (namespace serving) and spend by team (LiteLLM gateway)."
 }
