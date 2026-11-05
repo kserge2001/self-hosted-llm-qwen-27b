@@ -1,4 +1,4 @@
-# Grafana dashboard: GPU serving health and spend by team (reused from the first build).
+# Grafana dashboard: GPU serving health and spend by team.
 # The Grafana sidecar loads every ConfigMap with label grafana_dashboard=1.
 # The JSON lives in dashboards/ and is read with .Files.Get, so Grafana's own legend braces are not read by Helm.
 apiVersion: v1

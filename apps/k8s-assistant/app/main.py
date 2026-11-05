@@ -37,7 +37,7 @@ def ask(q: Question) -> dict:
         return agent.ask(q.question, q.user, get_client())
     except APIError as exc:
         # Tell a used-up budget by the error `type`, never by the status: LiteLLM changed the status between
-        # versions (429 in the first build, 422 in v1.106.5, both measured). Our callers always get 429.
+        # versions (429 in older versions, 422 in v1.106.5). Our callers always get 429.
         status = getattr(exc, "status_code", None) or 502
         if exc.type == "budget_exceeded":
             raise HTTPException(status_code=429, detail="team budget used up: ask the platform team") from exc

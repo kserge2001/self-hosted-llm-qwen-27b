@@ -50,7 +50,7 @@ resource "aws_ecr_lifecycle_policy" "gateway" {
 }
 
 # The account's registry scanning settings decide what ECR scans. With no rule there, ECR ignores
-# scan_on_push on the repositories above (seen in the first full run, 2026-11-04). This rule scans
+# scan_on_push on the repositories above. This rule scans
 # every push to an astra/* repository (basic scanning: known CVEs in OS packages).
 # ⚠️ This setting is account-wide: Terraform replaces any rules the account already has. In a shared
 # account, add the rule in the console instead and delete this resource.

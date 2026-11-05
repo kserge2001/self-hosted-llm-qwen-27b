@@ -19,7 +19,7 @@ loader:
   concurrency: 16         # parallel S3 connections
   memoryLimitBytes: 5368709120   # 5 GiB CPU buffer; without a limit the buffer can pass the pod memory limit
 
-# Flags after the model. The proven set from the first build (vLLM v0.31.0).
+# Flags after the model. Proven with this model on one L40S (vLLM v0.31.0).
 args:
   - --max-model-len=32768
   - --gpu-memory-utilization=0.92

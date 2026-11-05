@@ -3,7 +3,7 @@
 # The revision must already be in S3: run the loader Job in model/ for it first.
 
 image:
-  # Latest stable vLLM, checked 2026-10-28. The first build was proven on v0.31.0:
+  # Latest stable vLLM, checked 2026-10-28. The flags were proven on v0.31.0:
   # if v0.32.0 misbehaves, set v0.31.0 here and push.
   tag: v0.32.0
 model:

@@ -84,7 +84,7 @@ def test_ask_rejects_empty_question():
 
 @pytest.mark.parametrize("gateway_status", [429, 422])
 def test_budget_exceeded_is_429_with_a_clear_message(monkeypatch, gateway_status):
-    # LiteLLM sends "type": "budget_exceeded" with HTTP 429 (first build) or 422 (v1.106.5).
+    # LiteLLM sends "type": "budget_exceeded" with HTTP 429 (older versions) or 422 (v1.106.5).
     import httpx
     from openai import APIStatusError
 
