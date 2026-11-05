@@ -99,7 +99,8 @@ BUCKET=$(terraform -chdir=terraform/bootstrap output -raw state_bucket)
 answer=${CONFIRM_BUCKET:-}
 [ -n "$answer" ] || read -r -p "Type the bucket name to delete it and every old state version ($BUCKET): " answer
 [ "$answer" = "$BUCKET" ] || { echo "Not deleted."; exit 1; }
-VERSIONS=$(mktemp)
+# In the current folder, not mktemp: on Windows, aws.exe cannot read a Git Bash /tmp path.
+VERSIONS=.teardown-versions.json
 # shellcheck disable=SC2016  # the backticks are a JMESPath literal for the AWS CLI, not a shell command
 aws s3api list-object-versions --bucket "$BUCKET" --output json \
   --query '{Objects: [Versions, DeleteMarkers][][].{Key: Key, VersionId: VersionId}, Quiet: `true`}' > "$VERSIONS"
